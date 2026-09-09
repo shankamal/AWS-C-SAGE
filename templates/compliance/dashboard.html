@@ -1,0 +1,31 @@
+{% extends "compliance/base.html" %}
+{% block title %}C-SAGE | Compliance Dashboard{% endblock %}
+{% block content %}
+<section class="page-heading">
+  <div><div class="eyebrow">AWS MULTI-ACCOUNT GOVERNANCE</div><h1>Cloud Compliance Dashboard</h1><p>Centralized visibility across account inventory, compliance controls, exceptions and audit evidence.</p></div>
+  <div class="heading-actions"><a class="btn btn-outline" href="{% url 'export_findings_csv' %}">Download Full Report</a></div>
+</section>
+{% if scan %}
+<div class="scan-meta"><strong>Latest scan #{{ scan.id }}</strong><span>{{ scan.started_at|date:"d M Y, H:i T" }}</span><span class="badge badge-{{ scan.status|lower }}">{{ scan.status }}</span></div>
+<section class="metrics">
+  <article class="metric"><span>Total Accounts Scanned</span><strong>{{ scan.account_count }}</strong><small>Configured AWS accounts</small></article>
+  <article class="metric"><span>Total Resources Audited</span><strong>{{ scan.resource_count }}</strong><small>Master inventory resources</small></article>
+  <article class="metric success"><span>Compliant</span><strong>{{ scan.compliant_count }}</strong><small>Passing control checks</small></article>
+  <article class="metric danger"><span>Non-Compliant</span><strong>{{ scan.non_compliant_count }}</strong><small>Action required</small></article>
+  <article class="metric warning"><span>Suppressed</span><strong>{{ scan.suppressed_count }}</strong><small>Auditable exceptions</small></article>
+</section>
+<section class="grid-two">
+  <article class="panel"><div class="panel-head"><div><h2>Compliance Modules</h2><p>Current posture by audit area</p></div><a href="{% url 'findings' %}">View grid →</a></div>
+    <div class="module-list">{% for m in modules %}<div class="module-row"><span>{{ m.name }}</span><span>{{ m.total }} checks</span><span class="badge badge-danger">{{ m.non_compliant }} open</span><span class="badge badge-warning">{{ m.suppressed }} suppressed</span></div>{% empty %}<p>No module results available.</p>{% endfor %}</div>
+  </article>
+  <article class="panel"><div class="panel-head"><div><h2>Audit Exports</h2><p>Download consolidated evidence</p></div></div>
+    <div class="export-list"><a class="export-card" href="{% url 'export_inventory_xlsx' %}"><strong>Master Inventory</strong><span>Excel · all scanned resources</span></a><a class="export-card" href="{% url 'export_inventory_csv' %}"><strong>Master Inventory</strong><span>CSV · automation friendly</span></a><a class="export-card" href="{% url 'export_findings_csv' %}"><strong>Compliance Findings</strong><span>CSV · control-level results</span></a></div>
+  </article>
+</section>
+<section class="panel"><div class="panel-head"><div><h2>Priority Findings</h2><p>Latest non-compliant and suppressed findings</p></div><a href="{% url 'findings' %}">View all →</a></div>
+<div class="table-wrap"><table><thead><tr><th>Rule</th><th>Account</th><th>Region</th><th>Service</th><th>Resource</th><th>Severity</th><th>Status</th></tr></thead><tbody>{% for f in recent_findings %}<tr><td><strong>{{ f.rule_id }}</strong><small>{{ f.module }}</small></td><td>{{ f.account_name }}<small>{{ f.account_id }}</small></td><td>{{ f.region }}</td><td>{{ f.service }}</td><td class="resource">{{ f.resource_id }}</td><td><span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></td><td><span class="badge badge-{{ f.status|lower|cut:'_' }}">{{ f.get_status_display }}</span></td></tr>{% empty %}<tr><td colspan="7">No findings available.</td></tr>{% endfor %}</tbody></table></div>
+</section>
+{% else %}
+<section class="empty-state"><div class="empty-icon">✓</div><h2>C-SAGE is ready</h2><p>No scan has been executed yet. Sign in as an administrator and run the first AWS compliance audit.</p><a class="btn btn-secondary" href="/admin/login/?next=/">Secure Login 🔒</a></section>
+{% endif %}
+{% endblock %}

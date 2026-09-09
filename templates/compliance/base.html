@@ -1,0 +1,42 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}C-SAGE{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'compliance/csage.css' %}">
+</head>
+<body>
+  <div class="utility-bar">
+    <div class="shell utility-inner">
+      <div>Accessibility: <button type="button" data-font="85">A-</button><button type="button" data-font="100">A</button><button type="button" data-font="115">A+</button> <button id="contrastToggle" type="button">High Contrast</button></div>
+      <div>C-SAGE &nbsp;|&nbsp; Truth, Trust, Transparency</div>
+    </div>
+  </div>
+  <header class="brand-header">
+    <div class="shell brand-row">
+      <a href="{% url 'dashboard' %}" class="brand"><span class="brand-mark">C</span><span><strong>C-SAGE</strong><small>Cloud Security, Audit, Governance &amp; Enforcement</small></span></a>
+      <nav class="primary-nav" aria-label="Primary navigation">
+        <a href="{% url 'dashboard' %}">Dashboard</a>
+        <a href="{% url 'findings' %}">Compliance Grid</a>
+        <a href="{% url 'export_inventory_xlsx' %}">Master Inventory</a>
+        <a href="/admin/">Administration</a>
+      </nav>
+      <div class="header-actions">
+        {% if user.is_authenticated %}
+        <form action="{% url 'run_scan' %}" method="post">{% csrf_token %}<button class="btn btn-primary" type="submit">Run Audit Scan</button></form>
+        {% else %}
+        <a class="btn btn-secondary" href="/admin/login/?next=/">Secure Login 🔒</a>
+        {% endif %}
+      </div>
+    </div>
+  </header>
+  <main class="page-shell shell">
+    {% if messages %}<div class="messages">{% for message in messages %}<div class="alert {{ message.tags }}">{{ message }}</div>{% endfor %}</div>{% endif %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer class="footer"><div class="shell footer-inner"><div><strong>C-SAGE</strong> · Enterprise Cloud Compliance &amp; Governance</div><div>ICICI Bank digital visual standard alignment · Internal use</div></div></footer>
+  <script src="{% static 'compliance/csage.js' %}"></script>
+</body>
+</html>

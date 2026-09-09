@@ -1,0 +1,17 @@
+{% extends "compliance/base.html" %}
+{% block title %}C-SAGE | Compliance Grid{% endblock %}
+{% block content %}
+<section class="page-heading"><div><div class="eyebrow">CONTROL EVIDENCE</div><h1>Compliance Cloud Grid</h1><p>Search, filter and govern all C-SAGE compliance findings.</p></div><div class="heading-actions"><a class="btn btn-outline" href="{% url 'export_findings_csv' %}">Export CSV</a></div></section>
+<form class="filter-bar" method="get">
+  <label>Account<select name="account"><option value="">All Accounts</option>{% for id,name in accounts %}<option value="{{ id }}" {% if filters.account == id %}selected{% endif %}>{{ name }} ({{ id }})</option>{% endfor %}</select></label>
+  <label>Module<select name="module"><option value="">All Modules</option>{% for m in module_names %}<option value="{{ m }}" {% if filters.module == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+  <label>Status<select name="status"><option value="">All Statuses</option><option {% if filters.status == 'COMPLIANT' %}selected{% endif %}>COMPLIANT</option><option value="NON_COMPLIANT" {% if filters.status == 'NON_COMPLIANT' %}selected{% endif %}>NON-COMPLIANT</option><option {% if filters.status == 'SUPPRESSED' %}selected{% endif %}>SUPPRESSED</option></select></label>
+  <label class="grow">Keyword<input type="search" name="q" value="{{ filters.q }}" placeholder="Rule, resource, title or evidence"></label>
+  <button class="btn btn-primary" type="submit">Search</button>
+  <a class="btn btn-outline" href="{% url 'findings' %}">Reset</a>
+</form>
+<section class="panel"><div class="panel-head"><div><h2>Findings</h2><p>Up to 1,000 matching records are shown. Use export for the full dataset.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Rule / Module</th><th>Account</th><th>Region</th><th>Service</th><th>Resource</th><th>Finding</th><th>Severity</th><th>Status</th><th>Action</th></tr></thead><tbody>
+{% for f in findings %}<tr><td><strong>{{ f.rule_id }}</strong><small>{{ f.module }}</small></td><td>{{ f.account_name }}<small>{{ f.account_id }}</small></td><td>{{ f.region }}</td><td>{{ f.service }}</td><td class="resource">{{ f.resource_id }}<small>{{ f.resource_type }}</small></td><td>{{ f.title }}<small>{{ f.details }}</small></td><td><span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></td><td><span class="badge badge-{{ f.status|lower|cut:'_' }}">{{ f.get_status_display }}</span></td><td>{% if f.status != 'COMPLIANT' and f.status != 'ERROR' %}{% if user.is_authenticated %}<form method="post" action="{% url 'toggle_suppression' f.id %}">{% csrf_token %}<button class="link-button" type="submit">{% if f.status == 'SUPPRESSED' %}Unsuppress{% else %}Suppress{% endif %}</button></form>{% else %}<a href="/admin/login/?next={{ request.path }}">Login</a>{% endif %}{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="9">No findings match the selected filters.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

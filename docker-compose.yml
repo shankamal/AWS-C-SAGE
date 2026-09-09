@@ -1,0 +1,11 @@
+services:
+  csage:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - csage_data:/app/data
+volumes:
+  csage_data:

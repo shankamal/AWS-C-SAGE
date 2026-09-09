@@ -1,0 +1,31 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CSAGEReadOnlyAudit",
+      "Effect": "Allow",
+      "Action": [
+        "acm:DescribeCertificate", "acm:ListCertificates",
+        "backup:ListBackupVaults", "backup:ListRecoveryPointsByBackupVault",
+        "budgets:DescribeBudgets", "budgets:DescribeNotificationsForBudget", "budgets:DescribeSubscribersForNotification",
+        "config:SelectResourceConfig",
+        "dynamodb:DescribeContinuousBackups", "dynamodb:DescribeTable", "dynamodb:ListTables",
+        "ec2:DescribeInstances", "ec2:DescribeRegions", "ec2:DescribeSecurityGroups", "ec2:DescribeSnapshots", "ec2:DescribeVolumes",
+        "efs:DescribeFileSystems",
+        "elasticloadbalancing:DescribeListeners", "elasticloadbalancing:DescribeLoadBalancers",
+        "eks:DescribeCluster", "eks:ListClusters",
+        "elasticache:DescribeCacheClusters",
+        "es:DescribeElasticsearchDomain", "es:ListDomainNames",
+        "iam:ListAccessKeys", "iam:ListServerCertificates", "iam:ListUsers",
+        "kms:DescribeKey", "kms:GetKeyRotationStatus", "kms:ListKeys",
+        "lambda:ListFunctions",
+        "opensearch:DescribeDomain", "opensearch:ListDomainNames",
+        "rds:DescribeDBInstances",
+        "s3:GetBucketEncryption", "s3:GetBucketPolicyStatus", "s3:GetBucketPublicAccessBlock", "s3:ListAllMyBuckets",
+        "sns:ListSubscriptions",
+        "tag:GetResources"
+      ],
+      "Resource": "*"
+    }
+  ]
+}
