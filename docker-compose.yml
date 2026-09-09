@@ -6,6 +6,4 @@ services:
     env_file:
       - .env
     volumes:
-      - csage_data:/app/data
-volumes:
-  csage_data:
+      - ./data:/data
