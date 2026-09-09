@@ -26,6 +26,6 @@
 <div class="table-wrap"><table><thead><tr><th>Rule</th><th>Account</th><th>Region</th><th>Service</th><th>Resource</th><th>Severity</th><th>Status</th></tr></thead><tbody>{% for f in recent_findings %}<tr><td><strong>{{ f.rule_id }}</strong><small>{{ f.module }}</small></td><td>{{ f.account_name }}<small>{{ f.account_id }}</small></td><td>{{ f.region }}</td><td>{{ f.service }}</td><td class="resource">{{ f.resource_id }}</td><td><span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></td><td><span class="badge badge-{{ f.status|lower|cut:'_' }}">{{ f.get_status_display }}</span></td></tr>{% empty %}<tr><td colspan="7">No findings available.</td></tr>{% endfor %}</tbody></table></div>
 </section>
 {% else %}
-<section class="empty-state"><div class="empty-icon">✓</div><h2>C-SAGE is ready</h2><p>No scan has been executed yet. Sign in as an administrator and run the first AWS compliance audit.</p><a class="btn btn-secondary" href="/admin/login/?next=/">Secure Login 🔒</a></section>
+<section class="empty-state"><div class="empty-icon">✓</div><h2>C-SAGE is ready</h2><p>No scan has been executed yet. Use <strong>Run Audit Scan</strong> to create the first flat-file compliance snapshot.</p><p>Runtime data is persisted in the mounted C-SAGE data directory.</p></section>
 {% endif %}
 {% endblock %}
