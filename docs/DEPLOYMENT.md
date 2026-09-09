@@ -4,7 +4,8 @@
 **Runtime:** Python 3.11 / Django 5.x / Gunicorn  
 **Deployment Model:** Single Docker container on a Linux EC2 instance  
 **Persistence Model:** Local JSON flat files on an EC2 host bind mount  
-**Database:** None
+**Database:** None  
+**S3 Runtime Dependency:** None
 
 ---
 
@@ -13,15 +14,16 @@
 ```mermaid
 flowchart LR
     U[Enterprise User] --> EC2[Linux EC2 Instance\nDocker + C-SAGE]
-    EC2 --> DATA[(Host directory\n/opt/csage/data)]
+    EC2 --> DATA[(Encrypted EBS host directory\n/opt/csage/data)]
     EC2 --> STS[AWS STS AssumeRole]
-    EC2 --> S3[(Optional S3 account config)]
     STS --> A1[Target Account 1\nComplianceAuditRole]
     STS --> A2[Target Account 2\nComplianceAuditRole]
     STS --> AN[Target Account N\nComplianceAuditRole]
 ```
 
-C-SAGE does not require SQLite, PostgreSQL, RDS, Django migrations, or database-backed sessions. Application state is persisted as JSON files in the mounted data directory.
+C-SAGE does not require SQLite, PostgreSQL, RDS, S3 configuration storage, S3 suppression storage, Django migrations, or database-backed sessions.
+
+All C-SAGE state and cross-account configuration is stored on the EC2-mounted data directory.
 
 ---
 
@@ -31,11 +33,11 @@ Recommended starting point:
 
 - Amazon Linux 2023 or another approved enterprise Linux distribution.
 - Instance size: `t3.large` / `m6i.large` or equivalent for an initial deployment.
-- Encrypted EBS root/data volume using an approved KMS key.
-- EC2 instance profile with the C-SAGE execution permissions.
-- Security group allowing application access only from approved enterprise networks or a reverse proxy/ALB.
-- Outbound HTTPS access to required AWS APIs.
-- CloudWatch Agent or approved enterprise logging/monitoring agent if required.
+- Encrypted EBS storage using an approved customer-managed KMS key.
+- EC2 instance profile for STS role assumption.
+- Security group allowing application access only from approved enterprise networks or an internal reverse proxy/ALB.
+- Outbound HTTPS access to AWS APIs.
+- CloudWatch Agent or approved enterprise monitoring agent if required.
 
 For larger account estates, increase CPU/memory based on account count, number of regions, and scan concurrency.
 
@@ -78,8 +80,6 @@ cd app
 
 ## 5. Create Persistent Flat-File Storage
 
-Create the host directory that will survive container restarts and image upgrades:
-
 ```bash
 sudo mkdir -p /opt/csage/data
 sudo chown -R $USER:$USER /opt/csage/data
@@ -88,7 +88,7 @@ chmod 750 /opt/csage/data
 
 The container mounts this host directory at `/data`.
 
-C-SAGE will use the following files:
+C-SAGE uses:
 
 ```text
 /opt/csage/data/accounts.json
@@ -101,9 +101,11 @@ C-SAGE will use the following files:
 
 `scan_runs.json`, `findings.json`, `inventory.json`, and `suppressed_findings.json` are created automatically.
 
+Protect this directory because it contains cross-account IAM role mappings, scan evidence, and suppression history.
+
 ---
 
-## 6. Configure Accounts
+## 6. Configure Accounts and AssumeRole Details
 
 Copy the example:
 
@@ -121,32 +123,236 @@ Example:
       "account_id": "111122223333",
       "account_name": "Production",
       "role_arn": "arn:aws:iam::111122223333:role/ComplianceAuditRole",
+      "external_id": "",
+      "role_session_name": "CSAGEComplianceAudit",
+      "duration_seconds": 3600,
       "regions": ["ap-south-1", "ap-south-2"]
     },
     {
       "account_id": "444455556666",
       "account_name": "UAT",
       "role_arn": "arn:aws:iam::444455556666:role/ComplianceAuditRole",
+      "external_id": "",
+      "role_session_name": "CSAGEComplianceAudit",
+      "duration_seconds": 3600,
       "regions": ["ap-south-1"]
     }
   ]
 }
 ```
 
-Account resolution order is:
+Fields:
 
-1. S3 configuration when `COMPLIANCE_CONFIG_S3_BUCKET` is set.
-2. `/data/accounts.json` or the file configured in `CSAGE_ACCOUNTS_FILE`.
-3. The EC2 instance profile / default Boto3 credential chain for the current account.
+- `account_id`: 12-digit AWS account ID.
+- `account_name`: display name in C-SAGE.
+- `role_arn`: target cross-account audit role.
+- `external_id`: optional STS External ID. Leave blank when not required.
+- `role_session_name`: STS session name; defaults to `CSAGEComplianceAudit`.
+- `duration_seconds`: requested role session duration. C-SAGE constrains this to 900–43200 seconds; the target role's MaxSessionDuration still applies.
+- `regions`: regions to scan. If omitted/empty, C-SAGE discovers enabled regions.
+
+C-SAGE does not read account or AssumeRole configuration from S3.
+
+If `/data/accounts.json` is missing, empty, or unreadable, C-SAGE falls back to the EC2 instance profile/default Boto3 credential chain and scans the hosting AWS account.
 
 ---
 
-## 7. Configure Lifecycle/EOL Rules
+## 7. Cross-Account IAM
 
-Create:
+### 7.1 EC2 instance profile
+
+Attach a dedicated role such as:
+
+```text
+CSAGEApplicationRole
+```
+
+The baseline policy in `iam/CSAGEExecutionRolePolicy.json` now requires only `sts:AssumeRole` to the approved target `ComplianceAuditRole` roles.
+
+For production, replace wildcard resources with explicit approved role ARNs where feasible.
+
+Example restricted policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": "sts:AssumeRole",
+      "Resource": [
+        "arn:aws:iam::111122223333:role/ComplianceAuditRole",
+        "arn:aws:iam::444455556666:role/ComplianceAuditRole"
+      ]
+    }
+  ]
+}
+```
+
+### 7.2 Target account audit role
+
+Create `ComplianceAuditRole` in every audited account and attach the baseline permissions from:
+
+```text
+iam/ComplianceAuditRolePolicy.json
+```
+
+Trust only the C-SAGE EC2 role.
+
+Example trust policy:
+
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::<CSAGE_ACCOUNT_ID>:role/CSAGEApplicationRole"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+```
+
+If `external_id` is used in `accounts.json`, add the corresponding `sts:ExternalId` condition to the target trust policy.
+
+---
+
+## 8. Resource Suppression Flat File
+
+C-SAGE stores suppression decisions locally in:
+
+```text
+/opt/csage/data/suppressed_findings.json
+```
+
+The path can be changed with:
+
+```text
+CSAGE_SUPPRESSION_FILE=/data/suppressed_findings.json
+```
+
+A suppression record contains:
+
+- deterministic finding key
+- suppressed/unsuppressed state
+- actor
+- reason
+- suppression and update timestamps
+- rule ID and module
+- account ID/name
+- region
+- service
+- resource ID/type
+- severity
+- finding title/details
+
+Example:
+
+```json
+{
+  "version": 2,
+  "suppressions": {
+    "<finding-sha256-key>": {
+      "suppressed": true,
+      "actor": "csageadmin",
+      "reason": "Approved temporary exception under RITM1234567",
+      "rule_id": "CSAGE-SG-003",
+      "module": "Security Groups",
+      "account_id": "111122223333",
+      "account_name": "Production",
+      "region": "ap-south-1",
+      "service": "EC2",
+      "resource_id": "sg-0123456789abcdef0",
+      "resource_type": "Security Group",
+      "severity": "HIGH",
+      "suppressed_at": "2026-09-09T17:30:00+00:00",
+      "updated_at": "2026-09-09T17:30:00+00:00"
+    }
+  }
+}
+```
+
+See `suppressed_findings.example.json` in the repository.
+
+Suppressed findings remain visible in C-SAGE but are excluded from the open Non-Compliant count.
+
+---
+
+## 9. Runtime Environment Variables
+
+Create `.env` from the example:
 
 ```bash
-vi /opt/csage/data/lifecycle_rules.json
+cp .env.example .env
+vi .env
+```
+
+Important settings:
+
+```text
+DJANGO_DEBUG=false
+DJANGO_SECRET_KEY=<strong-random-value>
+DJANGO_ALLOWED_HOSTS=<EC2-private-ip>,<approved-hostname>
+DJANGO_CSRF_TRUSTED_ORIGINS=https://<approved-hostname>
+
+CSAGE_AUTH_USERNAME=csageadmin
+CSAGE_AUTH_PASSWORD=<strong-password>
+CSAGE_DATA_DIR=/data
+CSAGE_ACCOUNTS_FILE=/data/accounts.json
+CSAGE_LIFECYCLE_FILE=/data/lifecycle_rules.json
+CSAGE_SUPPRESSION_FILE=/data/suppressed_findings.json
+
+AWS_DEFAULT_REGION=ap-south-1
+```
+
+There are no S3 account/suppression environment variables.
+
+---
+
+## 10. Build and Run
+
+```bash
+cd /opt/csage/app
+docker build -t c-sage:latest .
+```
+
+Run:
+
+```bash
+docker run -d \
+  --name c-sage \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  --env-file /opt/csage/app/.env \
+  -v /opt/csage/data:/data \
+  c-sage:latest
+```
+
+Check:
+
+```bash
+docker ps
+docker logs c-sage
+curl http://127.0.0.1:8000/healthz/
+```
+
+Expected health response:
+
+```json
+{"status":"ok","service":"C-SAGE","storage":"flat-file"}
+```
+
+---
+
+## 11. Lifecycle Rules
+
+Maintain PaaS lifecycle data in:
+
+```text
+/opt/csage/data/lifecycle_rules.json
 ```
 
 Example:
@@ -160,198 +366,69 @@ Example:
       "version": "1.30",
       "eol_date": "2026-11-26",
       "active": true,
-      "source_reference": "https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html",
-      "notes": "Maintain against approved lifecycle source"
+      "source_reference": "https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html"
     }
   ]
 }
 ```
 
-Use approved AWS lifecycle/EOL dates and update this file through the normal operational change process.
+---
+
+## 12. Network and Security
+
+Recommended controls:
+
+- Keep EC2 in a private subnet where possible.
+- Expose C-SAGE only through approved corporate connectivity or an internal ALB/reverse proxy.
+- Use HTTPS for production access.
+- Restrict port `8000` to the reverse proxy/ALB or approved management ranges.
+- Use IMDSv2 for EC2 instance metadata.
+- Encrypt EBS with an approved CMEK.
+- Restrict SSH and prefer AWS Systems Manager Session Manager where permitted.
+- Protect `/opt/csage/data` with least-privilege Linux ownership and mode `750` or stricter.
+- Do not put static AWS access keys in `.env` or flat files.
+
+C-SAGE obtains AWS credentials from the EC2 instance profile and uses STS temporary credentials for target accounts.
 
 ---
 
-## 8. Configure Environment Variables
+## 13. Backup and Recovery
 
-Create the environment file:
-
-```bash
-cp .env.example .env
-vi .env
-```
-
-Minimum production values:
+Back up the persistent data directory because it contains audit state and governance configuration:
 
 ```text
-DJANGO_DEBUG=false
-DJANGO_SECRET_KEY=<strong-random-secret>
-DJANGO_ALLOWED_HOSTS=<EC2-private-IP>,<approved-hostname>
-DJANGO_CSRF_TRUSTED_ORIGINS=https://<approved-hostname>
-
-CSAGE_AUTH_USERNAME=<admin-user>
-CSAGE_AUTH_PASSWORD=<strong-password>
-CSAGE_DATA_DIR=/data
-CSAGE_ACCOUNTS_FILE=/data/accounts.json
-CSAGE_LIFECYCLE_FILE=/data/lifecycle_rules.json
-CSAGE_SUPPRESSION_FILE=/data/suppressed_findings.json
-
-AWS_DEFAULT_REGION=ap-south-1
+/opt/csage/data
 ```
 
-There is no `DATABASE_URL`.
+Recommended options:
 
-For a temporary local test only, authentication can be disabled with:
+- EBS snapshots / AWS Backup for the EC2 data volume.
+- Filesystem-level backup to an approved enterprise backup destination.
+- Retain copies according to audit evidence retention requirements.
+
+Minimum files to protect:
 
 ```text
-CSAGE_DISABLE_AUTH=true
+accounts.json
+lifecycle_rules.json
+scan_runs.json
+findings.json
+inventory.json
+suppressed_findings.json
 ```
 
-Do not disable authentication in production.
+A restore consists of restoring `/opt/csage/data`, rebuilding/pulling the container image, and starting the container with the same bind mount.
 
 ---
 
-## 9. EC2 IAM Role
+## 14. Upgrade and Rollback
 
-Attach an instance profile to the C-SAGE EC2 instance.
-
-The role should permit only what C-SAGE requires, including:
-
-- `sts:AssumeRole` to approved target `ComplianceAuditRole` roles.
-- S3 read access only when S3 account configuration is used.
-- Read/list API permissions required for the current AWS account when scanning without cross-account role assumption.
-
-Use `iam/CSAGEExecutionRolePolicy.json` as the starting point and restrict resource ARNs for the target environment.
-
-Each target AWS account should contain `ComplianceAuditRole` with the read-only permissions in `iam/ComplianceAuditRolePolicy.json` and a trust relationship to the C-SAGE EC2 role.
-
----
-
-## 10. Build the Docker Image
-
-```bash
-cd /opt/csage/app
-docker build -t c-sage:latest .
-```
-
-Optional validation:
-
-```bash
-docker image inspect c-sage:latest >/dev/null
-```
-
----
-
-## 11. Run C-SAGE
-
-```bash
-docker run -d \
-  --name c-sage \
-  --restart unless-stopped \
-  -p 8000:8000 \
-  --env-file /opt/csage/app/.env \
-  -v /opt/csage/data:/data \
-  c-sage:latest
-```
-
-Check status:
-
-```bash
-docker ps
-docker logs -f c-sage
-```
-
-Health check:
-
-```bash
-curl http://127.0.0.1:8000/healthz/
-```
-
-Expected response:
-
-```json
-{"status":"ok","service":"C-SAGE","storage":"flat-file"}
-```
-
----
-
-## 12. Access the Application
-
-Browse to:
-
-```text
-http://<EC2-IP>:8000
-```
-
-The browser will request HTTP Basic credentials configured using:
-
-```text
-CSAGE_AUTH_USERNAME
-CSAGE_AUTH_PASSWORD
-```
-
-For production, prefer one of these patterns:
-
-- Internal ALB with HTTPS/ACM in front of EC2.
-- Enterprise reverse proxy.
-- Enterprise SSO/authentication gateway in front of C-SAGE.
-
-Do not expose port `8000` directly to the public internet.
-
----
-
-## 13. Persistent File Behaviour
-
-After a successful scan C-SAGE writes:
-
-- `scan_runs.json` — scan history and summary counts.
-- `findings.json` — latest control-level findings.
-- `inventory.json` — latest consolidated resource inventory.
-- `suppressed_findings.json` — suppression state, actor, reason, and timestamp.
-
-The application uses atomic file replacement and Linux file locking for writes.
-
-Recommended permissions:
-
-```bash
-chmod 750 /opt/csage/data
-chmod 640 /opt/csage/data/*.json
-```
-
-Do not place credentials or AWS secret keys in these JSON files.
-
----
-
-## 14. Backup and Restore
-
-Back up the host data directory regularly:
-
-```bash
-sudo tar -czf /opt/csage/csage-data-$(date +%Y%m%d-%H%M).tar.gz /opt/csage/data
-```
-
-A production implementation can use:
-
-- EBS snapshots.
-- AWS Backup for the EBS volume.
-- Scheduled encrypted copy of the JSON files to an approved S3 bucket.
-
-Restore by stopping the container, restoring `/opt/csage/data`, and starting the container again.
-
-```bash
-docker stop c-sage
-# restore files
-docker start c-sage
-```
-
----
-
-## 15. Upgrade Procedure
+Upgrade:
 
 ```bash
 cd /opt/csage/app
 git pull
-
-docker build -t c-sage:latest .
+docker build -t c-sage:new .
 docker stop c-sage
 docker rm c-sage
 
@@ -361,124 +438,47 @@ docker run -d \
   -p 8000:8000 \
   --env-file /opt/csage/app/.env \
   -v /opt/csage/data:/data \
-  c-sage:latest
+  c-sage:new
 ```
 
-No database migration step is required.
+The persistent data remains outside the container.
+
+For rollback, stop the new container and start the previous image using the same `/opt/csage/data:/data` bind mount.
 
 ---
 
-## 16. Rollback
+## 15. Validation Checklist
 
-Before an upgrade, retain the previous image with a version tag:
-
-```bash
-docker tag c-sage:latest c-sage:previous
-```
-
-Rollback:
-
-```bash
-docker stop c-sage
-docker rm c-sage
-
-docker run -d \
-  --name c-sage \
-  --restart unless-stopped \
-  -p 8000:8000 \
-  --env-file /opt/csage/app/.env \
-  -v /opt/csage/data:/data \
-  c-sage:previous
-```
-
-The same `/opt/csage/data` directory is reused.
-
----
-
-## 17. Validation Checklist
-
-- [ ] EC2 instance profile is attached.
 - [ ] Docker service is running.
-- [ ] `/opt/csage/data` exists and is writable by the container.
-- [ ] `accounts.json` contains the correct account IDs and role ARNs.
-- [ ] Target account trust policies permit the C-SAGE EC2 role.
-- [ ] `lifecycle_rules.json` contains the approved lifecycle catalogue.
-- [ ] Strong Basic Auth credentials are configured.
 - [ ] C-SAGE container is healthy.
-- [ ] `/healthz/` returns HTTP 200.
-- [ ] First compliance scan completes.
-- [ ] `findings.json` is created.
-- [ ] `inventory.json` is created.
-- [ ] Suppression/unsuppression persists after container restart.
-- [ ] CSV/Excel exports work.
-- [ ] EC2 security group is restricted to approved sources.
-- [ ] EBS backup/snapshot policy covers `/opt/csage/data`.
+- [ ] `/healthz/` returns `200`.
+- [ ] `/opt/csage/data` is mounted to `/data`.
+- [ ] `accounts.json` contains all approved Account IDs and Role ARNs.
+- [ ] Optional External IDs match target role trust policies.
+- [ ] EC2 instance profile can assume every configured target role.
+- [ ] Target roles are read-only and least privilege.
+- [ ] First audit scan completes.
+- [ ] `scan_runs.json`, `findings.json`, and `inventory.json` are created.
+- [ ] Suppressing a finding creates/updates `suppressed_findings.json` with resource and actor details.
+- [ ] Suppressed findings remain visible but are removed from open non-compliance totals.
+- [ ] CSV/XLSX exports work.
+- [ ] EBS encryption and backup controls are enabled.
+- [ ] Access to `/opt/csage/data` is restricted.
 
 ---
 
-## 18. Troubleshooting
+## 16. Operational Evidence to Retain
 
-### Container cannot write files
+For audit readiness retain:
 
-```bash
-ls -ld /opt/csage/data
-sudo chown -R $USER:$USER /opt/csage/data
-```
+- approved `accounts.json` versions
+- target-role trust policies
+- C-SAGE EC2 instance-profile policy
+- CloudTrail STS `AssumeRole` events
+- scan exports
+- `suppressed_findings.json` history/backups
+- EBS encryption evidence
+- EC2/data-volume backup evidence
+- deployment/change tickets and release commit SHA
 
-### C-SAGE returns 503 authentication configuration error
-
-Set both:
-
-```text
-CSAGE_AUTH_USERNAME
-CSAGE_AUTH_PASSWORD
-```
-
-and restart the container.
-
-### No accounts are scanned
-
-Validate in this order:
-
-```bash
-cat /opt/csage/data/accounts.json
-aws sts get-caller-identity
-```
-
-Then verify target `ComplianceAuditRole` trust policies.
-
-### Scan fails with AccessDenied
-
-Review the EC2 instance role, target account audit role, SCPs, permission boundaries, and CloudTrail `AssumeRole` events.
-
-### Data disappears after container replacement
-
-Confirm the bind mount exists:
-
-```bash
-docker inspect c-sage | grep -A5 Mounts
-```
-
-The container must be started with:
-
-```text
--v /opt/csage/data:/data
-```
-
----
-
-## 19. Audit Evidence to Retain
-
-For operational and RBI/audit readiness, retain:
-
-- Approved EC2 architecture and security group configuration.
-- EC2 IAM role and target `ComplianceAuditRole` policies/trust relationships.
-- Approved `accounts.json` configuration history.
-- Approved `lifecycle_rules.json` changes.
-- `scan_runs.json`, `findings.json`, and exported reports.
-- `suppressed_findings.json` with suppression reasons and actors.
-- EBS backup/snapshot evidence.
-- Container image/version and deployment change ticket.
-- CloudTrail evidence for `AssumeRole` activity.
-
-C-SAGE is therefore deployable as a self-contained Docker workload on a Linux EC2 instance with no external database dependency.
+This provides an auditable chain from configured account access through compliance findings and approved suppressions without relying on a database or S3 application state.
