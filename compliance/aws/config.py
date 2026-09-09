@@ -4,7 +4,6 @@ import os
 from pathlib import Path
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
 
 from .types import AccountTarget
 
@@ -12,6 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 class AccountResolver:
+    """Resolve AWS account and AssumeRole configuration from a local JSON flat file.
+
+    C-SAGE intentionally does not use S3 for account configuration. The default
+    configuration file is /data/accounts.json, which should be backed by the EC2
+    host bind mount.
+    """
+
     def __init__(self, base_session=None):
         self.base_session = base_session or boto3.Session()
 
@@ -29,17 +35,6 @@ class AccountResolver:
         ]
 
     def resolve(self) -> list[AccountTarget]:
-        bucket = os.getenv("COMPLIANCE_CONFIG_S3_BUCKET", "").strip()
-        key = os.getenv("COMPLIANCE_CONFIG_S3_KEY", "aws-compliance-config/accounts.json").strip()
-        if bucket:
-            try:
-                body = self.base_session.client("s3").get_object(Bucket=bucket, Key=key)["Body"].read()
-                targets = self._targets(json.loads(body))
-                if targets:
-                    return targets
-            except (ClientError, BotoCoreError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-                logger.warning("Unable to load account config from s3://%s/%s: %s", bucket, key, exc)
-
         local_path = Path(os.getenv("CSAGE_ACCOUNTS_FILE", "/data/accounts.json"))
         if local_path.exists():
             try:
@@ -47,8 +42,9 @@ class AccountResolver:
                     targets = self._targets(json.load(handle))
                 if targets:
                     return targets
+                logger.warning("Account configuration %s contains no accounts; using EC2 instance profile for current account", local_path)
             except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
-                logger.warning("Unable to load local account config %s: %s", local_path, exc)
+                logger.warning("Unable to load local account configuration %s; using EC2 instance profile for current account: %s", local_path, exc)
 
         sts = self.base_session.client("sts")
         identity = sts.get_caller_identity()
