@@ -102,9 +102,9 @@ def toggle_suppression(request, finding_id):
             messages.success(request, "Finding unsuppressed.")
         else:
             reason = request.POST.get("reason", "Suppressed through C-SAGE UI")[:500]
-            suppressions.suppress(finding.finding_key, actor, reason)
+            suppressions.suppress(finding.finding_key, actor, reason, finding=finding)
             finding.status = Finding.Status.SUPPRESSED
-            messages.success(request, "Finding suppressed and persisted to the local flat-file store.")
+            messages.success(request, "Finding suppressed and persisted with resource details in the local flat-file store.")
 
         store.write_findings([item.to_dict() for item in findings])
         if scan:
