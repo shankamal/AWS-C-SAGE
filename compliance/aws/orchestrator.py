@@ -1,10 +1,10 @@
 import logging
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from django.db import transaction
-from django.utils import timezone
+
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from django.utils import timezone
+
 from compliance.models import Finding, ResourceInventory, ScanRun
 from .config import AccountResolver
 from .session import session_for
@@ -12,6 +12,7 @@ from .scanners import SCANNERS, scan_inventory
 from .suppressions import SuppressionStore, make_finding_key
 
 logger = logging.getLogger(__name__)
+
 
 class ComplianceOrchestrator:
     def __init__(self):
