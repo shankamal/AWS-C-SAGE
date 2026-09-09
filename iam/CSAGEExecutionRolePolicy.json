@@ -2,15 +2,6 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "ReadConfigAndSuppressions",
-      "Effect": "Allow",
-      "Action": ["s3:GetObject", "s3:PutObject"],
-      "Resource": [
-        "arn:aws:s3:::REPLACE_CONFIG_BUCKET/aws-compliance-config/accounts.json",
-        "arn:aws:s3:::REPLACE_SUPPRESSION_BUCKET/suppressed_findings.json"
-      ]
-    },
-    {
       "Sid": "AssumeComplianceRoles",
       "Effect": "Allow",
       "Action": "sts:AssumeRole",
