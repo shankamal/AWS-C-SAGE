@@ -24,15 +24,22 @@ class AccountResolver:
     @staticmethod
     def _targets(payload):
         raw_accounts = payload.get("accounts", payload if isinstance(payload, list) else [])
-        return [
-            AccountTarget(
-                account_id=str(account["account_id"]),
-                account_name=account.get("account_name", str(account["account_id"])),
-                role_arn=account.get("role_arn") or f"arn:aws:iam::{account['account_id']}:role/ComplianceAuditRole",
-                regions=tuple(account.get("regions") or ()),
+        targets = []
+        for account in raw_accounts:
+            duration = int(account.get("duration_seconds", 3600) or 3600)
+            duration = max(900, min(duration, 43200))
+            targets.append(
+                AccountTarget(
+                    account_id=str(account["account_id"]),
+                    account_name=account.get("account_name", str(account["account_id"])),
+                    role_arn=account.get("role_arn") or f"arn:aws:iam::{account['account_id']}:role/ComplianceAuditRole",
+                    regions=tuple(account.get("regions") or ()),
+                    external_id=account.get("external_id") or None,
+                    role_session_name=account.get("role_session_name") or "CSAGEComplianceAudit",
+                    duration_seconds=duration,
+                )
             )
-            for account in raw_accounts
-        ]
+        return targets
 
     def resolve(self) -> list[AccountTarget]:
         local_path = Path(os.getenv("CSAGE_ACCOUNTS_FILE", "/data/accounts.json"))
