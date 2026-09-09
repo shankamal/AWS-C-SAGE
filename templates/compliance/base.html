@@ -21,14 +21,9 @@
         <a href="{% url 'dashboard' %}">Dashboard</a>
         <a href="{% url 'findings' %}">Compliance Grid</a>
         <a href="{% url 'export_inventory_xlsx' %}">Master Inventory</a>
-        <a href="/admin/">Administration</a>
       </nav>
       <div class="header-actions">
-        {% if user.is_authenticated %}
         <form action="{% url 'run_scan' %}" method="post">{% csrf_token %}<button class="btn btn-primary" type="submit">Run Audit Scan</button></form>
-        {% else %}
-        <a class="btn btn-secondary" href="/admin/login/?next=/">Secure Login 🔒</a>
-        {% endif %}
       </div>
     </div>
   </header>
