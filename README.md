@@ -6,13 +6,13 @@ C-SAGE is an AWS multi-account cloud compliance and governance application built
 
 ## Key capabilities
 
-- S3-driven AWS multi-account configuration with STS `AssumeRole`
-- Fallback to the workload IAM role / default AWS credential chain
+- S3-driven or local flat-file AWS multi-account configuration with STS `AssumeRole`
+- Fallback to the EC2 instance profile / default AWS credential chain
 - Concurrent account and regional scans
-- Broad resource inventory using AWS Config and Resource Groups Tagging API, with explicit discovery for core audited resources
 - 11 compliance audit modules covering inventory, lifecycle, certificates, IAM keys, encryption, backup, S3, Lambda, security groups, KMS, and notification domains
-- S3-persisted finding suppressions
-- Cached scan runs and findings in SQLite or PostgreSQL
+- Database-free runtime: no SQLite, PostgreSQL, RDS, migrations, or Django DB sessions
+- JSON flat-file persistence under `/data`
+- Flat-file finding suppressions
 - CSV and Excel exports
 - ICICI Bank UI design tokens with accessibility font scaling
 - Single Docker container using Gunicorn
@@ -23,28 +23,50 @@ C-SAGE is an AWS multi-account cloud compliance and governance application built
 - [Compliance Control Catalog](docs/CONTROL_CATALOG.md)
 - [Deployment Guide](docs/DEPLOYMENT.md)
 
-## Quick start
+## Runtime data files
 
-```bash
-cp .env.example .env
-docker build -t c-sage .
-docker run --rm -p 8000:8000 --env-file .env c-sage
+By default C-SAGE stores state in `/data` inside the container. Mount that directory from the EC2 host.
+
+```text
+/data/accounts.json
+/data/lifecycle_rules.json
+/data/scan_runs.json
+/data/findings.json
+/data/inventory.json
+/data/suppressed_findings.json
 ```
 
-Create an administrator before first use (`python manage.py createsuperuser` when running locally, or execute the equivalent command in the container), then open `http://localhost:8000`. All dashboard, scan, suppression, and export views require authentication; `/healthz/` remains unauthenticated for platform health checks.
+## Quick start on Linux / EC2
 
-For a production AWS deployment using Amazon ECR, ECS Fargate, ALB/ACM, Amazon RDS PostgreSQL, S3 configuration, cross-account IAM roles, Secrets Manager/SSM, and CloudWatch, follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+```bash
+git clone https://github.com/shankamal/AWS-C-SAGE.git
+cd AWS-C-SAGE
+cp .env.example .env
+mkdir -p data
+cp accounts.example.json data/accounts.json
+
+docker build -t c-sage:latest .
+
+docker run -d \
+  --name c-sage \
+  --restart unless-stopped \
+  -p 8000:8000 \
+  --env-file .env \
+  -v "$(pwd)/data:/data" \
+  c-sage:latest
+```
+
+Open `http://<EC2-IP>:8000`. C-SAGE uses HTTP Basic authentication configured through `CSAGE_AUTH_USERNAME` and `CSAGE_AUTH_PASSWORD`. `/healthz/` is unauthenticated for health checks.
 
 ## AWS account configuration
 
-Set:
+C-SAGE checks configuration in this order:
 
-```text
-COMPLIANCE_CONFIG_S3_BUCKET=my-governance-bucket
-COMPLIANCE_CONFIG_S3_KEY=aws-compliance-config/accounts.json
-```
+1. S3 when `COMPLIANCE_CONFIG_S3_BUCKET` is configured.
+2. Local flat file defined by `CSAGE_ACCOUNTS_FILE` (default `/data/accounts.json`).
+3. EC2 instance profile / default Boto3 credential chain for the current AWS account.
 
-Example configuration:
+Example:
 
 ```json
 {
@@ -59,29 +81,32 @@ Example configuration:
 }
 ```
 
-If the S3 configuration is unavailable, C-SAGE scans with the default Boto3 credential provider chain.
-
-## Suppressions
-
-Configure:
-
-```text
-SUPPRESSION_S3_BUCKET=my-governance-bucket
-SUPPRESSION_S3_KEY=suppressed_findings.json
-```
-
-Suppressions remain visible and auditable, but are excluded from the non-compliant summary count.
-
 ## Lifecycle/EOL rules
 
-PaaS lifecycle rules are stored in the `LifecycleRule` table. Populate or maintain them through Django Admin. C-SAGE evaluates a matching service/engine/version as non-compliant when its EOL/EOS date is in the past or within the configured warning window (default 30 days).
+Maintain lifecycle data in `/data/lifecycle_rules.json`:
+
+```json
+{
+  "rules": [
+    {
+      "service": "eks",
+      "engine": "kubernetes",
+      "version": "1.30",
+      "eol_date": "2026-11-26",
+      "active": true,
+      "source_reference": "https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html"
+    }
+  ]
+}
+```
 
 ## Security notes
 
-- Use a dedicated read-only audit role in each target account.
-- Restrict the C-SAGE execution role to only the required S3 objects and `sts:AssumeRole` target roles.
-- Put the application behind enterprise SSO / reverse-proxy authentication before production exposure.
-- Store `DJANGO_SECRET_KEY` in AWS Secrets Manager, SSM Parameter Store, or the deployment platform's secret facility.
+- Attach a dedicated IAM role to the EC2 instance.
+- Use dedicated read-only `ComplianceAuditRole` roles in target accounts.
+- Restrict inbound access to the EC2 security group or place C-SAGE behind an internal ALB/reverse proxy.
+- Set a strong `DJANGO_SECRET_KEY`, `CSAGE_AUTH_USERNAME`, and `CSAGE_AUTH_PASSWORD`.
+- Back up `/opt/csage/data` or the chosen host data directory because it contains C-SAGE state and audit history.
 
 ## Local checks
 
