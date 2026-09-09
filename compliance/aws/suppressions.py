@@ -13,7 +13,12 @@ def make_finding_key(rule_id: str, account_id: str, region: str, resource_id: st
 
 
 class SuppressionStore:
-    """Persist finding suppressions as an auditable JSON flat file on the EC2 host volume."""
+    """Persist resource suppression details as an auditable JSON flat file.
+
+    No S3 dependency is used. By default the file is
+    /data/suppressed_findings.json on the container, backed by the EC2 host
+    bind mount.
+    """
 
     def __init__(self, session=None):
         configured = os.getenv("CSAGE_SUPPRESSION_FILE", "").strip()
@@ -35,7 +40,7 @@ class SuppressionStore:
             return {}
 
     def save(self, data: dict):
-        payload = {"version": 1, "suppressions": data}
+        payload = {"version": 2, "suppressions": data}
         if self.path.parent.resolve() == store.data_dir.resolve():
             store.write_json(self.path.name, payload)
             return
@@ -46,14 +51,34 @@ class SuppressionStore:
             os.fsync(handle.fileno())
         os.replace(temp, self.path)
 
-    def suppress(self, finding_key: str, actor: str, reason: str = ""):
+    def suppress(self, finding_key: str, actor: str, reason: str = "", finding=None):
         data = self.load()
-        data[finding_key] = {
+        now = datetime.now(timezone.utc).isoformat()
+        existing = data.get(finding_key, {})
+        record = {
+            **existing,
             "suppressed": True,
             "actor": actor,
             "reason": reason,
-            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "updated_at": now,
+            "suppressed_at": existing.get("suppressed_at") or now,
         }
+        if finding is not None:
+            record.update({
+                "finding_key": finding_key,
+                "rule_id": getattr(finding, "rule_id", ""),
+                "module": getattr(finding, "module", ""),
+                "account_id": getattr(finding, "account_id", ""),
+                "account_name": getattr(finding, "account_name", ""),
+                "region": getattr(finding, "region", ""),
+                "service": getattr(finding, "service", ""),
+                "resource_id": getattr(finding, "resource_id", ""),
+                "resource_type": getattr(finding, "resource_type", ""),
+                "severity": getattr(finding, "severity", ""),
+                "title": getattr(finding, "title", ""),
+                "details": getattr(finding, "details", ""),
+            })
+        data[finding_key] = record
         self.save(data)
 
     def unsuppress(self, finding_key: str, actor: str):
@@ -62,4 +87,5 @@ class SuppressionStore:
             data[finding_key]["suppressed"] = False
             data[finding_key]["actor"] = actor
             data[finding_key]["updated_at"] = datetime.now(timezone.utc).isoformat()
+            data[finding_key]["unsuppressed_at"] = datetime.now(timezone.utc).isoformat()
         self.save(data)
