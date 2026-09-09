@@ -17,6 +17,12 @@ C-SAGE is an AWS multi-account cloud compliance and governance application built
 - ICICI Bank UI design tokens with accessibility font scaling
 - Single Docker container using Gunicorn
 
+## Documentation
+
+- [Architecture](docs/ARCHITECTURE.md)
+- [Compliance Control Catalog](docs/CONTROL_CATALOG.md)
+- [Deployment Guide](docs/DEPLOYMENT.md)
+
 ## Quick start
 
 ```bash
@@ -26,6 +32,8 @@ docker run --rm -p 8000:8000 --env-file .env c-sage
 ```
 
 Create an administrator before first use (`python manage.py createsuperuser` when running locally, or execute the equivalent command in the container), then open `http://localhost:8000`. All dashboard, scan, suppression, and export views require authentication; `/healthz/` remains unauthenticated for platform health checks.
+
+For a production AWS deployment using Amazon ECR, ECS Fargate, ALB/ACM, Amazon RDS PostgreSQL, S3 configuration, cross-account IAM roles, Secrets Manager/SSM, and CloudWatch, follow [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## AWS account configuration
 
