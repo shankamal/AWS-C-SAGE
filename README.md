@@ -6,13 +6,14 @@ C-SAGE is an AWS multi-account cloud compliance and governance application built
 
 ## Key capabilities
 
-- S3-driven or local flat-file AWS multi-account configuration with STS `AssumeRole`
-- Fallback to the EC2 instance profile / default AWS credential chain
+- Local flat-file AWS multi-account configuration with STS `AssumeRole`
+- Optional AssumeRole External ID, session name, duration, and per-account regions
+- Fallback to the EC2 instance profile / default AWS credential chain for the current account
 - Concurrent account and regional scans
 - 11 compliance audit modules covering inventory, lifecycle, certificates, IAM keys, encryption, backup, S3, Lambda, security groups, KMS, and notification domains
 - Database-free runtime: no SQLite, PostgreSQL, RDS, migrations, or Django DB sessions
 - JSON flat-file persistence under `/data`
-- Flat-file finding suppressions
+- Detailed flat-file resource suppressions with actor, reason, account, region, service, resource, rule, and timestamps
 - CSV and Excel exports
 - ICICI Bank UI design tokens with accessibility font scaling
 - Single Docker container using Gunicorn
@@ -36,6 +37,8 @@ By default C-SAGE stores state in `/data` inside the container. Mount that direc
 /data/suppressed_findings.json
 ```
 
+There is no S3 dependency for account configuration or suppression persistence.
+
 ## Quick start on Linux / EC2
 
 ```bash
@@ -58,13 +61,9 @@ docker run -d \
 
 Open `http://<EC2-IP>:8000`. C-SAGE uses HTTP Basic authentication configured through `CSAGE_AUTH_USERNAME` and `CSAGE_AUTH_PASSWORD`. `/healthz/` is unauthenticated for health checks.
 
-## AWS account configuration
+## AWS account and AssumeRole configuration
 
-C-SAGE checks configuration in this order:
-
-1. S3 when `COMPLIANCE_CONFIG_S3_BUCKET` is configured.
-2. Local flat file defined by `CSAGE_ACCOUNTS_FILE` (default `/data/accounts.json`).
-3. EC2 instance profile / default Boto3 credential chain for the current AWS account.
+C-SAGE reads cross-account configuration only from the flat file defined by `CSAGE_ACCOUNTS_FILE` (default `/data/accounts.json`).
 
 Example:
 
@@ -75,11 +74,32 @@ Example:
       "account_id": "111122223333",
       "account_name": "Production",
       "role_arn": "arn:aws:iam::111122223333:role/ComplianceAuditRole",
+      "external_id": "",
+      "role_session_name": "CSAGEComplianceAudit",
+      "duration_seconds": 3600,
       "regions": ["ap-south-1", "ap-south-2"]
     }
   ]
 }
 ```
+
+If the file is missing, empty, or unreadable, C-SAGE falls back to the EC2 instance profile / default Boto3 credential chain and audits the current AWS account.
+
+## Resource suppressions
+
+Suppressions are persisted only in the flat file defined by `CSAGE_SUPPRESSION_FILE` (default `/data/suppressed_findings.json`).
+
+Each suppression record contains the finding key plus auditable details including:
+
+- rule and module
+- account ID and account name
+- region and AWS service
+- resource ID and resource type
+- severity, title, and finding details
+- suppression actor and reason
+- suppression/update timestamps
+
+See `suppressed_findings.example.json` for an example. Suppressed findings remain visible but are excluded from the open non-compliant count.
 
 ## Lifecycle/EOL rules
 
@@ -103,10 +123,13 @@ Maintain lifecycle data in `/data/lifecycle_rules.json`:
 ## Security notes
 
 - Attach a dedicated IAM role to the EC2 instance.
+- Allow that role to `sts:AssumeRole` only into approved target `ComplianceAuditRole` roles.
 - Use dedicated read-only `ComplianceAuditRole` roles in target accounts.
+- Protect `/opt/csage/data` because it contains account role mappings, scan evidence, lifecycle rules, and suppression history.
+- Use encrypted EBS and restrict Linux permissions on the data directory.
 - Restrict inbound access to the EC2 security group or place C-SAGE behind an internal ALB/reverse proxy.
-- Set a strong `DJANGO_SECRET_KEY`, `CSAGE_AUTH_USERNAME`, and `CSAGE_AUTH_PASSWORD`.
-- Back up `/opt/csage/data` or the chosen host data directory because it contains C-SAGE state and audit history.
+- Set strong `DJANGO_SECRET_KEY`, `CSAGE_AUTH_USERNAME`, and `CSAGE_AUTH_PASSWORD` values.
+- Back up `/opt/csage/data` or the chosen host data directory.
 
 ## Local checks
 
