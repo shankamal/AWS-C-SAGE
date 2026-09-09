@@ -4,12 +4,18 @@
       "account_id": "111122223333",
       "account_name": "Production",
       "role_arn": "arn:aws:iam::111122223333:role/ComplianceAuditRole",
+      "external_id": "",
+      "role_session_name": "CSAGEComplianceAudit",
+      "duration_seconds": 3600,
       "regions": ["ap-south-1", "ap-south-2"]
     },
     {
       "account_id": "444455556666",
       "account_name": "Non-Production",
       "role_arn": "arn:aws:iam::444455556666:role/ComplianceAuditRole",
+      "external_id": "",
+      "role_session_name": "CSAGEComplianceAudit",
+      "duration_seconds": 3600,
       "regions": ["ap-south-1"]
     }
   ]
