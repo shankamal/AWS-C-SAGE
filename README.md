@@ -11,6 +11,8 @@ C-SAGE is an AWS multi-account cloud compliance and governance application built
 - Fallback to the EC2 instance profile / default AWS credential chain for the current account
 - Concurrent account and regional scans
 - 11 compliance audit modules covering inventory, lifecycle, certificates, IAM keys, encryption, backup, S3, Lambda, security groups, KMS, and notification domains
+- AWS-native lifecycle discovery: EKS support dates from EKS APIs, RDS support dates from RDS APIs, and lifecycle/deprecation notices from AWS Health
+- No maintained EOL/EOS rule file and no hard-coded deprecated Lambda runtime list
 - Database-free runtime: no SQLite, PostgreSQL, RDS, migrations, or Django DB sessions
 - JSON flat-file persistence under `/data`
 - Detailed flat-file resource suppressions with actor, reason, account, region, service, resource, rule, and timestamps
@@ -30,14 +32,13 @@ By default C-SAGE stores state in `/data` inside the container. Mount that direc
 
 ```text
 /data/accounts.json
-/data/lifecycle_rules.json
 /data/scan_runs.json
 /data/findings.json
 /data/inventory.json
 /data/suppressed_findings.json
 ```
 
-There is no S3 dependency for account configuration or suppression persistence.
+There is no S3 dependency for account configuration or suppression persistence, and lifecycle dates are not maintained locally.
 
 ## Quick start on Linux / EC2
 
@@ -87,45 +88,30 @@ If the file is missing, empty, or unreadable, C-SAGE falls back to the EC2 insta
 
 ## Resource suppressions
 
-Suppressions are persisted only in the flat file defined by `CSAGE_SUPPRESSION_FILE` (default `/data/suppressed_findings.json`).
+Suppressions are persisted only in the flat file defined by `CSAGE_SUPPRESSION_FILE` (default `/data/suppressed_findings.json`). Suppressed findings remain visible but are excluded from the open non-compliant count.
 
-Each suppression record contains the finding key plus auditable details including:
+## Lifecycle / EOL / EOS discovery
 
-- rule and module
-- account ID and account name
-- region and AWS service
-- resource ID and resource type
-- severity, title, and finding details
-- suppression actor and reason
-- suppression/update timestamps
+C-SAGE does not maintain lifecycle dates in a local file.
 
-See `suppressed_findings.example.json` for an example. Suppressed findings remain visible but are excluded from the open non-compliant count.
+The scanner obtains lifecycle information from AWS itself:
 
-## Lifecycle/EOL rules
+- **Amazon EKS**: `DescribeClusterVersions` provides the current version status plus end-of-standard-support and end-of-extended-support dates.
+- **Amazon RDS / Aurora open-source engines**: `DescribeDBMajorEngineVersions` provides supported lifecycle periods and support end dates.
+- **AWS Health**: scheduled-change events are queried for AWS-published deprecation, retirement, version, runtime, upgrade, and end-of-support notices affecting account resources.
+- **AWS Lambda runtime lifecycle**: no hard-coded deprecated runtime list is maintained. C-SAGE relies on AWS Health notices for runtime deprecation/EOS while continuing to enforce Lambda VPC compliance directly from the Lambda API.
 
-Maintain lifecycle data in `/data/lifecycle_rules.json`:
+`CSAGE_EOL_WARNING_DAYS` controls how far ahead C-SAGE flags an AWS-published support deadline; it does not contain lifecycle dates or versions.
 
-```json
-{
-  "rules": [
-    {
-      "service": "eks",
-      "engine": "kubernetes",
-      "version": "1.30",
-      "eol_date": "2026-11-26",
-      "active": true,
-      "source_reference": "https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html"
-    }
-  ]
-}
-```
+AWS Health Dashboard is available in the AWS console to all customers. Programmatic AWS Health API access requires an eligible AWS Support plan. If Health API access is unavailable, C-SAGE still evaluates lifecycle dates exposed directly by EKS and RDS APIs and records the Health API limitation as informational evidence.
 
 ## Security notes
 
 - Attach a dedicated IAM role to the EC2 instance.
 - Allow that role to `sts:AssumeRole` only into approved target `ComplianceAuditRole` roles.
 - Use dedicated read-only `ComplianceAuditRole` roles in target accounts.
-- Protect `/opt/csage/data` because it contains account role mappings, scan evidence, lifecycle rules, and suppression history.
+- Grant the target audit role read-only lifecycle permissions for EKS, RDS, and AWS Health.
+- Protect `/opt/csage/data` because it contains account role mappings, scan evidence, and suppression history.
 - Use encrypted EBS and restrict Linux permissions on the data directory.
 - Restrict inbound access to the EC2 security group or place C-SAGE behind an internal ALB/reverse proxy.
 - Set strong `DJANGO_SECRET_KEY`, `CSAGE_AUTH_USERNAME`, and `CSAGE_AUTH_PASSWORD` values.
