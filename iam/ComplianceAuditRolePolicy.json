@@ -2,29 +2,174 @@
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "CSAGEReadOnlyAudit",
+      "Sid": "CSAGECompleteInventoryAndComplianceReadOnly",
       "Effect": "Allow",
       "Action": [
-        "acm:DescribeCertificate", "acm:ListCertificates",
-        "backup:ListBackupVaults", "backup:ListRecoveryPointsByBackupVault",
-        "budgets:DescribeBudgets", "budgets:DescribeNotificationsForBudget", "budgets:DescribeSubscribersForNotification",
+        "acm:DescribeCertificate",
+        "acm:ListCertificates",
+
+        "apigateway:GET",
+
+        "appsync:ListGraphqlApis",
+
+        "autoscaling:DescribeAutoScalingGroups",
+
+        "backup:ListBackupVaults",
+        "backup:ListRecoveryPointsByBackupVault",
+
+        "budgets:DescribeBudgets",
+        "budgets:DescribeNotificationsForBudget",
+        "budgets:DescribeSubscribersForNotification",
+
+        "cloudformation:DescribeStacks",
+        "cloudformation:ListStacks",
+
+        "cloudfront:ListDistributions",
+
+        "cloudtrail:DescribeTrails",
+
+        "cloudwatch:DescribeAlarms",
+
+        "config:BatchGetResourceConfig",
         "config:SelectResourceConfig",
-        "dynamodb:DescribeContinuousBackups", "dynamodb:DescribeTable", "dynamodb:ListTables",
-        "ec2:DescribeInstances", "ec2:DescribeRegions", "ec2:DescribeSecurityGroups", "ec2:DescribeSnapshots", "ec2:DescribeVolumes",
+
+        "controltower:ListLandingZones",
+
+        "directconnect:DescribeConnections",
+        "directconnect:DescribeDirectConnectGateways",
+        "directconnect:DescribeVirtualInterfaces",
+
+        "dms:DescribeReplicationInstances",
+        "dms:DescribeReplicationTasks",
+
+        "dynamodb:DescribeContinuousBackups",
+        "dynamodb:DescribeTable",
+        "dynamodb:ListTables",
+        "dynamodb:ListTagsOfResource",
+
+        "ec2:Describe*",
+
+        "ecr:DescribeRepositories",
+
+        "ecs:DescribeClusters",
+        "ecs:DescribeServices",
+        "ecs:DescribeTasks",
+        "ecs:ListClusters",
+        "ecs:ListServices",
+        "ecs:ListTasks",
+
         "efs:DescribeFileSystems",
-        "elasticloadbalancing:DescribeListeners", "elasticloadbalancing:DescribeLoadBalancers",
-        "eks:DescribeCluster", "eks:DescribeClusterVersions", "eks:ListClusters",
+
+        "eks:DescribeCluster",
+        "eks:DescribeClusterVersions",
+        "eks:DescribeFargateProfile",
+        "eks:DescribeNodegroup",
+        "eks:ListClusters",
+        "eks:ListFargateProfiles",
+        "eks:ListNodegroups",
+
         "elasticache:DescribeCacheClusters",
-        "es:DescribeElasticsearchDomain", "es:ListDomainNames",
-        "health:DescribeAffectedEntities", "health:DescribeEventDetails", "health:DescribeEvents",
-        "iam:ListAccessKeys", "iam:ListServerCertificates", "iam:ListUsers",
-        "kms:DescribeKey", "kms:GetKeyRotationStatus", "kms:ListKeys",
+
+        "elasticloadbalancing:Describe*",
+
+        "elasticmapreduce:ListClusters",
+
+        "events:ListRules",
+
+        "fsx:DescribeFileSystems",
+
+        "glue:GetCrawlers",
+        "glue:GetDatabases",
+        "glue:GetJobs",
+        "glue:GetTables",
+
+        "health:DescribeAffectedEntities",
+        "health:DescribeEventDetails",
+        "health:DescribeEvents",
+
+        "iam:ListAccessKeys",
+        "iam:ListGroups",
+        "iam:ListPolicies",
+        "iam:ListRoles",
+        "iam:ListServerCertificates",
+        "iam:ListUsers",
+
+        "kafka:ListClustersV2",
+
+        "kms:DescribeKey",
+        "kms:GetKeyRotationStatus",
+        "kms:ListKeys",
+        "kms:ListResourceTags",
+
         "lambda:ListFunctions",
-        "opensearch:DescribeDomain", "opensearch:ListDomainNames",
-        "rds:DescribeDBEngineVersions", "rds:DescribeDBInstances", "rds:DescribeDBMajorEngineVersions",
-        "s3:GetBucketEncryption", "s3:GetBucketPolicyStatus", "s3:GetBucketPublicAccessBlock", "s3:ListAllMyBuckets",
+
+        "logs:DescribeLogGroups",
+
+        "memorydb:DescribeClusters",
+
+        "mq:ListBrokers",
+
+        "network-firewall:ListFirewalls",
+
+        "opensearch:DescribeDomain",
+        "opensearch:ListDomainNames",
+
+        "organizations:ListAccounts",
+
+        "rds:DescribeDBClusters",
+        "rds:DescribeDBEngineVersions",
+        "rds:DescribeDBInstances",
+        "rds:DescribeDBMajorEngineVersions",
+
+        "redshift:DescribeClusters",
+
+        "resource-explorer-2:ListSupportedResourceTypes",
+        "resource-explorer-2:Search",
+
+        "route53:ListHealthChecks",
+        "route53:ListHostedZones",
+
+        "s3:GetBucketEncryption",
+        "s3:GetBucketLifecycleConfiguration",
+        "s3:GetBucketLocation",
+        "s3:GetBucketOwnershipControls",
+        "s3:GetBucketPolicyStatus",
+        "s3:GetBucketPublicAccessBlock",
+        "s3:GetBucketReplication",
+        "s3:GetBucketTagging",
+        "s3:GetBucketVersioning",
+        "s3:ListAllMyBuckets",
+
+        "sagemaker:ListEndpoints",
+        "sagemaker:ListModels",
+        "sagemaker:ListNotebookInstances",
+        "sagemaker:ListTrainingJobs",
+
+        "secretsmanager:ListSecrets",
+
+        "shield:ListProtections",
+
         "sns:ListSubscriptions",
-        "tag:GetResources"
+        "sns:ListTopics",
+
+        "sqs:GetQueueAttributes",
+        "sqs:ListQueueTags",
+        "sqs:ListQueues",
+
+        "ssm:DescribeInstanceInformation",
+        "ssm:DescribeMaintenanceWindows",
+        "ssm:ListAssociations",
+
+        "states:ListStateMachines",
+
+        "tag:GetResources",
+
+        "transfer:ListServers",
+
+        "wafv2:ListIPSets",
+        "wafv2:ListRegexPatternSets",
+        "wafv2:ListRuleGroups",
+        "wafv2:ListWebACLs"
       ],
       "Resource": "*"
     }
