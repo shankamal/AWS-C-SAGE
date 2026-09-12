@@ -19,11 +19,14 @@ flowchart LR
     STS --> A1[Target Account 1\nComplianceAuditRole]
     STS --> A2[Target Account 2\nComplianceAuditRole]
     STS --> AN[Target Account N\nComplianceAuditRole]
+    A1 --> AWSMETA[AWS Service APIs + AWS Health]
+    A2 --> AWSMETA
+    AN --> AWSMETA
 ```
 
-C-SAGE does not require SQLite, PostgreSQL, RDS, S3 configuration storage, S3 suppression storage, Django migrations, or database-backed sessions.
+C-SAGE does not require SQLite, PostgreSQL, RDS, S3 configuration storage, S3 suppression storage, Django migrations, database-backed sessions, or a locally maintained EOL/EOS catalog.
 
-All C-SAGE state and cross-account configuration is stored on the EC2-mounted data directory.
+All C-SAGE state and cross-account configuration is stored on the EC2-mounted data directory. Lifecycle support dates are queried from AWS at scan time.
 
 ---
 
@@ -92,7 +95,6 @@ C-SAGE uses:
 
 ```text
 /opt/csage/data/accounts.json
-/opt/csage/data/lifecycle_rules.json
 /opt/csage/data/scan_runs.json
 /opt/csage/data/findings.json
 /opt/csage/data/inventory.json
@@ -167,27 +169,9 @@ Attach a dedicated role such as:
 CSAGEApplicationRole
 ```
 
-The baseline policy in `iam/CSAGEExecutionRolePolicy.json` now requires only `sts:AssumeRole` to the approved target `ComplianceAuditRole` roles.
+The baseline policy in `iam/CSAGEExecutionRolePolicy.json` requires `sts:AssumeRole` to the approved target `ComplianceAuditRole` roles.
 
 For production, replace wildcard resources with explicit approved role ARNs where feasible.
-
-Example restricted policy:
-
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": "sts:AssumeRole",
-      "Resource": [
-        "arn:aws:iam::111122223333:role/ComplianceAuditRole",
-        "arn:aws:iam::444455556666:role/ComplianceAuditRole"
-      ]
-    }
-  ]
-}
-```
 
 ### 7.2 Target account audit role
 
@@ -195,6 +179,17 @@ Create `ComplianceAuditRole` in every audited account and attach the baseline pe
 
 ```text
 iam/ComplianceAuditRolePolicy.json
+```
+
+The lifecycle scanner requires these additional read-only permissions:
+
+```text
+eks:DescribeClusterVersions
+rds:DescribeDBEngineVersions
+rds:DescribeDBMajorEngineVersions
+health:DescribeEvents
+health:DescribeEventDetails
+health:DescribeAffectedEntities
 ```
 
 Trust only the C-SAGE EC2 role.
@@ -234,46 +229,7 @@ The path can be changed with:
 CSAGE_SUPPRESSION_FILE=/data/suppressed_findings.json
 ```
 
-A suppression record contains:
-
-- deterministic finding key
-- suppressed/unsuppressed state
-- actor
-- reason
-- suppression and update timestamps
-- rule ID and module
-- account ID/name
-- region
-- service
-- resource ID/type
-- severity
-- finding title/details
-
-Example:
-
-```json
-{
-  "version": 2,
-  "suppressions": {
-    "<finding-sha256-key>": {
-      "suppressed": true,
-      "actor": "csageadmin",
-      "reason": "Approved temporary exception under RITM1234567",
-      "rule_id": "CSAGE-SG-003",
-      "module": "Security Groups",
-      "account_id": "111122223333",
-      "account_name": "Production",
-      "region": "ap-south-1",
-      "service": "EC2",
-      "resource_id": "sg-0123456789abcdef0",
-      "resource_type": "Security Group",
-      "severity": "HIGH",
-      "suppressed_at": "2026-09-09T17:30:00+00:00",
-      "updated_at": "2026-09-09T17:30:00+00:00"
-    }
-  }
-}
-```
+A suppression record contains the deterministic finding key, suppressed/unsuppressed state, actor, reason, timestamps, rule/module, account, region, service, resource, severity and finding detail.
 
 See `suppressed_findings.example.json` in the repository.
 
@@ -302,13 +258,13 @@ CSAGE_AUTH_USERNAME=csageadmin
 CSAGE_AUTH_PASSWORD=<strong-password>
 CSAGE_DATA_DIR=/data
 CSAGE_ACCOUNTS_FILE=/data/accounts.json
-CSAGE_LIFECYCLE_FILE=/data/lifecycle_rules.json
 CSAGE_SUPPRESSION_FILE=/data/suppressed_findings.json
 
 AWS_DEFAULT_REGION=ap-south-1
+CSAGE_EOL_WARNING_DAYS=30
 ```
 
-There are no S3 account/suppression environment variables.
+`CSAGE_EOL_WARNING_DAYS` is only an alert threshold against AWS-published dates. It does not define EOL dates, versions or deprecated runtimes.
 
 ---
 
@@ -347,30 +303,33 @@ Expected health response:
 
 ---
 
-## 11. Lifecycle Rules
+## 11. AWS-Native Lifecycle / EOL / EOS Discovery
 
-Maintain PaaS lifecycle data in:
+C-SAGE does not maintain a `lifecycle_rules.json` file.
 
-```text
-/opt/csage/data/lifecycle_rules.json
-```
+### EKS
 
-Example:
+C-SAGE queries the EKS `DescribeClusterVersions` API for the Kubernetes version running on each cluster. AWS returns:
 
-```json
-{
-  "rules": [
-    {
-      "service": "eks",
-      "engine": "kubernetes",
-      "version": "1.30",
-      "eol_date": "2026-11-26",
-      "active": true,
-      "source_reference": "https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html"
-    }
-  ]
-}
-```
+- current version support status
+- end of standard support date
+- end of extended support date
+
+C-SAGE flags a cluster when end of standard support is reached or enters the configured warning window.
+
+### RDS and Aurora
+
+For open-source engines, C-SAGE queries `DescribeDBMajorEngineVersions`. AWS returns standard-support and, where applicable, extended-support lifecycle windows. The scan evaluates those AWS-provided dates directly.
+
+### AWS Health Dashboard / API
+
+C-SAGE also queries AWS Health scheduled-change events to detect AWS-published lifecycle notices for services that do not expose a dedicated support-date API. It examines deprecation, retirement, version, runtime, upgrade and end-of-support events plus their affected resources.
+
+AWS Health Dashboard is available in the AWS console. Programmatic Health API access requires an eligible AWS Support plan. Accounts without API entitlement return `SubscriptionRequiredException`; C-SAGE records this as informational evidence and continues EKS/RDS service-native checks.
+
+### Lambda runtime lifecycle
+
+No deprecated Lambda runtime list is maintained in C-SAGE. Lambda runtime deprecation/EOS comes from AWS Health notices. Lambda VPC attachment compliance is still evaluated directly from the Lambda API.
 
 ---
 
@@ -410,7 +369,6 @@ Minimum files to protect:
 
 ```text
 accounts.json
-lifecycle_rules.json
 scan_runs.json
 findings.json
 inventory.json
@@ -456,9 +414,12 @@ For rollback, stop the new container and start the previous image using the same
 - [ ] `accounts.json` contains all approved Account IDs and Role ARNs.
 - [ ] Optional External IDs match target role trust policies.
 - [ ] EC2 instance profile can assume every configured target role.
-- [ ] Target roles are read-only and least privilege.
+- [ ] Target roles are read-only and include EKS/RDS/AWS Health lifecycle read permissions.
 - [ ] First audit scan completes.
 - [ ] `scan_runs.json`, `findings.json`, and `inventory.json` are created.
+- [ ] EKS lifecycle findings show AWS-provided support dates.
+- [ ] RDS lifecycle findings show AWS-provided lifecycle dates where supported.
+- [ ] AWS Health scheduled-change findings appear when Health API access is available.
 - [ ] Suppressing a finding creates/updates `suppressed_findings.json` with resource and actor details.
 - [ ] Suppressed findings remain visible but are removed from open non-compliance totals.
 - [ ] CSV/XLSX exports work.
@@ -476,9 +437,10 @@ For audit readiness retain:
 - C-SAGE EC2 instance-profile policy
 - CloudTrail STS `AssumeRole` events
 - scan exports
+- AWS-native lifecycle findings and AWS Health event evidence captured in findings
 - `suppressed_findings.json` history/backups
 - EBS encryption evidence
 - EC2/data-volume backup evidence
 - deployment/change tickets and release commit SHA
 
-This provides an auditable chain from configured account access through compliance findings and approved suppressions without relying on a database or S3 application state.
+This provides an auditable chain from configured account access through AWS-native lifecycle evidence, compliance findings and approved suppressions without relying on a database, S3 application state or manually maintained EOL catalog.
