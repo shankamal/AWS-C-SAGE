@@ -31,6 +31,9 @@
         "cloudwatch:DescribeAlarms",
 
         "config:BatchGetResourceConfig",
+        "config:DescribeConfigurationRecorders",
+        "config:GetResourceConfigHistory",
+        "config:ListDiscoveredResources",
         "config:SelectResourceConfig",
 
         "controltower:GetLandingZone",
