@@ -1,23 +1,52 @@
 name: C-SAGE CI
+
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CSAGE_DATA_DIR: /tmp/csage-data
+      CSAGE_ACCOUNTS_FILE: /tmp/csage-data/accounts.json
+      CSAGE_SUPPRESSION_FILE: /tmp/csage-data/suppressed_findings.json
+      DJANGO_DEBUG: "false"
+      DJANGO_SECRET_KEY: ci-test-key
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1,testserver
+      DJANGO_CSRF_COOKIE_SECURE: "false"
+      AWS_DEFAULT_REGION: ap-south-1
+      AWS_EC2_METADATA_DISABLED: "true"
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
           cache: pip
-      - run: pip install -r requirements.txt
-      - run: python manage.py check
-        env:
-          DJANGO_DEBUG: 'true'
-      - run: python manage.py test
-        env:
-          DJANGO_DEBUG: 'true'
-      - run: docker build -t c-sage:${{ github.sha }} .
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Prepare flat-file data directory
+        run: mkdir -p /tmp/csage-data
+
+      - name: Compile Python
+        run: python -m compileall -q .
+
+      - name: Django system check
+        run: python manage.py check
+
+      - name: Unit tests
+        run: python manage.py test
+
+      - name: Docker build
+        run: docker build -t c-sage:${{ github.sha }} .
