@@ -9,20 +9,20 @@
   </div>
   <div class="heading-actions">
     <a class="btn btn-outline" href="{% url 'export_inventory_csv' %}{% if export_query %}?{{ export_query }}{% endif %}">Export CSV</a>
-    <a class="btn btn-primary" href="{% url 'export_inventory_xlsx' %}{% if export_query %}?{{ export_query }}{% endif %}">Export Excel</a>
+    <a class="btn btn-primary" href="{% url 'export_inventory_xlsx' %}{% if export_query %}?{{ export_query }}{% endif %}">Export Filtered Excel</a>
   </div>
 </section>
 
 {% if scan %}
 <div class="inventory-kpis">
   <article><span>Discovered Resources</span><strong>{{ total_count }}</strong><small>Latest scan</small></article>
-  <article><span>Filtered Resources</span><strong>{{ filtered_count }}</strong><small>Current view</small></article>
+  <article><span>Filtered Resources</span><strong>{{ filtered_count }}</strong><small>Current search criteria</small></article>
   <article><span>Service / Type Coverage</span><strong>{{ coverage_count }}</strong><small>Includes zero-resource services</small></article>
   <article><span>Zero Resource Types</span><strong>{{ zero_resource_count }}</strong><small>Explicitly retained</small></article>
   <article class="{% if coverage_issue_count %}inventory-kpi-warning{% endif %}"><span>Coverage Issues</span><strong>{{ coverage_issue_count }}</strong><small>Access denied / unavailable / error</small></article>
 </div>
 
-<form class="filter-bar inventory-filter" method="get">
+<form class="filter-bar inventory-filter" method="get" id="inventoryFilterForm">
   <label>Account
     <select name="account">
       <option value="">All Accounts</option>
@@ -30,13 +30,13 @@
     </select>
   </label>
   <label>Service
-    <select name="service">
+    <select name="service" id="serviceFilter">
       <option value="">All Services</option>
       {% for item in services %}<option value="{{ item }}" {% if filters.service == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
     </select>
   </label>
   <label>Resource Type
-    <select name="resource_type">
+    <select name="resource_type" id="resourceTypeFilter" data-selected="{{ filters.resource_type }}">
       <option value="">All Resource Types</option>
       {% for item in resource_types %}<option value="{{ item }}" {% if filters.resource_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
     </select>
@@ -59,6 +59,11 @@
   <button class="btn btn-primary" type="submit">Apply</button>
   <a class="btn btn-outline" href="{% url 'inventory' %}">Reset</a>
 </form>
+
+<div class="inventory-export-note">
+  <strong>Excel export follows the current search criteria.</strong>
+  Each service/resource-type worksheet contains one row per resource, with Tags, Configuration, Networking, Security, Relationships and raw AWS API properties flattened into their own Excel columns.
+</div>
 
 <section class="panel inventory-panel">
   <div class="panel-head">
@@ -115,6 +120,45 @@
     </table>
   </div>
 </section>
+
+{{ service_resource_types|json_script:"service-resource-types-data" }}
+<script>
+(function () {
+  const serviceSelect = document.getElementById('serviceFilter');
+  const typeSelect = document.getElementById('resourceTypeFilter');
+  const dataNode = document.getElementById('service-resource-types-data');
+  if (!serviceSelect || !typeSelect || !dataNode) return;
+
+  const mapping = JSON.parse(dataNode.textContent || '{}');
+  const allTypes = Array.from(new Set(Object.values(mapping).flat())).sort();
+
+  function populateResourceTypes() {
+    const selectedService = serviceSelect.value;
+    const previous = typeSelect.value || typeSelect.dataset.selected || '';
+    const types = selectedService ? (mapping[selectedService] || []) : allTypes;
+
+    typeSelect.innerHTML = '';
+    const allOption = document.createElement('option');
+    allOption.value = '';
+    allOption.textContent = selectedService ? `All ${selectedService} Resource Types` : 'All Resource Types';
+    typeSelect.appendChild(allOption);
+
+    types.forEach(function (resourceType) {
+      const option = document.createElement('option');
+      option.value = resourceType;
+      option.textContent = resourceType;
+      if (resourceType === previous && types.includes(previous)) option.selected = true;
+      typeSelect.appendChild(option);
+    });
+
+    if (previous && !types.includes(previous)) typeSelect.value = '';
+    typeSelect.dataset.selected = typeSelect.value;
+  }
+
+  serviceSelect.addEventListener('change', populateResourceTypes);
+  populateResourceTypes();
+})();
+</script>
 {% else %}
 <section class="empty-state"><div class="empty-icon">▦</div><h2>No Master Inventory yet</h2><p>Run an Audit Scan to discover AWS resources across all configured accounts.</p></section>
 {% endif %}
