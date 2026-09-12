@@ -6,10 +6,12 @@ import boto3
 from django.utils import timezone
 
 from compliance.models import Finding, ResourceInventory, ScanRun
+from compliance.storage import store
 from .config import AccountResolver
+from .inventory import discover_inventory
 from .lifecycle import scan_dynamic_lifecycle, scan_lambda_dynamic
 from .session import session_for
-from .scanners import SCANNERS, scan_inventory
+from .scanners import SCANNERS
 from .suppressions import SuppressionStore, make_finding_key
 
 logger = logging.getLogger(__name__)
@@ -26,21 +28,25 @@ class ComplianceOrchestrator:
     def __init__(self):
         self.base_session = boto3.Session()
         self.max_workers = int(os.getenv("CSAGE_MAX_WORKERS", "8"))
+        self.home_region = self.base_session.region_name or os.getenv("AWS_DEFAULT_REGION", "ap-south-1")
 
     def _regions(self, session, target):
         if target.regions:
             return list(target.regions)
-        region = self.base_session.region_name or os.getenv("AWS_DEFAULT_REGION", "ap-south-1")
         try:
-            ec2 = session.client("ec2", region_name=region)
+            ec2 = session.client("ec2", region_name=self.home_region)
             return sorted(r["RegionName"] for r in ec2.describe_regions(AllRegions=False).get("Regions", []))
         except Exception:
-            return [region]
+            return [self.home_region]
 
     def _scan_account(self, target):
         session = session_for(target, self.base_session)
         regions = self._regions(session, target)
-        inventory = scan_inventory(session, target, regions)
+
+        # Master Inventory is independent from compliance findings. It deliberately records
+        # zero-resource and access-denied coverage instead of silently omitting services.
+        inventory, coverage = discover_inventory(session, target, regions, self.home_region)
+
         findings = []
         for scanner in ACTIVE_SCANNERS:
             try:
@@ -53,27 +59,32 @@ class ComplianceOrchestrator:
                     "resource_type": "Scanner Module", "compliant": False, "title": "Scanner execution error", "details": str(exc),
                     "severity": "HIGH", "evidence": {"exception": exc.__class__.__name__}
                 })())
-        return inventory, findings
+        return inventory, coverage, findings
 
     def run(self, initiated_by="system"):
         scan = ScanRun.objects.create(status=ScanRun.Status.RUNNING, initiated_by=initiated_by)
         try:
             targets = AccountResolver(self.base_session).resolve()
             suppressions = SuppressionStore(self.base_session).load()
-            all_inventory, all_findings = [], []
+            all_inventory, all_coverage, all_findings = [], [], []
+
             with ThreadPoolExecutor(max_workers=min(self.max_workers, max(1, len(targets)))) as pool:
                 futures = {pool.submit(self._scan_account, target): target for target in targets}
                 for future in as_completed(futures):
-                    inv, findings = future.result()
+                    inv, coverage, findings = future.result()
                     all_inventory.extend(inv)
+                    all_coverage.extend(coverage)
                     all_findings.extend(findings)
 
-            inv_rows = [ResourceInventory(
-                scan_run=scan, account_id=i.account_id, account_name=i.account_name, region=i.region,
-                service=i.service, resource_type=i.resource_type, resource_id=i.resource_id,
-                resource_arn=i.resource_arn, metadata=i.metadata,
-            ) for i in all_inventory]
+            inv_rows = [ResourceInventory(scan_run=scan, **i.__dict__) for i in all_inventory]
             ResourceInventory.objects.bulk_create(inv_rows, batch_size=500)
+
+            coverage_rows = []
+            for row in all_coverage:
+                item = dict(row)
+                item["scan_run_id"] = scan.id
+                coverage_rows.append(item)
+            store.write_inventory_coverage(coverage_rows)
 
             finding_rows = []
             for f in all_findings:
