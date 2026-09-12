@@ -8,6 +8,7 @@ from django.utils import timezone
 from compliance.models import Finding, ResourceInventory, ScanRun
 from compliance.storage import store
 from .config import AccountResolver
+from .control_plane_inventory import discover_control_plane_inventory
 from .inventory import discover_inventory
 from .lifecycle import scan_dynamic_lifecycle, scan_lambda_dynamic
 from .resource_explorer_inventory import discover_resource_explorer
@@ -154,8 +155,10 @@ class ComplianceOrchestrator:
         # Master Inventory is independent from compliance findings. It deliberately records
         # zero-resource and access-denied coverage instead of silently omitting services.
         inventory, coverage = discover_inventory(session, target, regions, self.home_region)
+        control_inventory, control_coverage = discover_control_plane_inventory(session, target, regions)
         explorer_inventory, explorer_coverage = discover_resource_explorer(session, target, regions)
-        inventory = self._consolidate_inventory(inventory, explorer_inventory)
+        inventory = self._consolidate_inventory(inventory, control_inventory, explorer_inventory)
+        coverage.extend(control_coverage)
         coverage.extend(explorer_coverage)
 
         findings = []
