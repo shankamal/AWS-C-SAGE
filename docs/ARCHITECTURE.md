@@ -12,10 +12,11 @@ C-SAGE (Cloud Security, Audit, Governance & Enforcement) is a single-container D
 4. For configured member accounts, C-SAGE calls AWS STS `AssumeRole` using the role metadata from the local flat file.
 5. If no valid account file is available, C-SAGE falls back to the EC2 instance profile/default AWS credential provider chain and scans the current account.
 6. Accounts are scanned concurrently. Within each account C-SAGE resolves configured/enabled regions and executes the compliance modules.
-7. Inventory, findings, scan history, lifecycle rules and suppressions are persisted as JSON flat files in `/data`.
-8. Resource suppression records contain the original finding metadata, suppression actor, reason and timestamps.
-9. Dashboard counters exclude suppressed findings from the open non-compliant count while preserving the records as auditable evidence.
-10. Operators export inventory and findings as CSV/XLSX evidence.
+7. Lifecycle data is queried dynamically from AWS service APIs and AWS Health; C-SAGE does not maintain an EOL/EOS rule catalog.
+8. Inventory, findings, scan history and suppressions are persisted as JSON flat files in `/data`.
+9. Resource suppression records contain the original finding metadata, suppression actor, reason and timestamps.
+10. Dashboard counters exclude suppressed findings from the open non-compliant count while preserving the records as auditable evidence.
+11. Operators export inventory and findings as CSV/XLSX evidence.
 
 ## Components
 
@@ -25,7 +26,8 @@ C-SAGE (Cloud Security, Audit, Governance & Enforcement) is a single-container D
 - `compliance/middleware.py`: database-free HTTP Basic authentication.
 - `compliance/aws/config.py`: local flat-file account and AssumeRole configuration plus EC2 credential fallback.
 - `compliance/aws/session.py`: STS role assumption using local role metadata.
-- `compliance/aws/scanners.py`: compliance scanner implementations.
+- `compliance/aws/scanners.py`: core compliance scanner implementations.
+- `compliance/aws/lifecycle.py`: AWS-native lifecycle discovery using EKS, RDS and AWS Health APIs.
 - `compliance/aws/orchestrator.py`: concurrent scan execution and persistence.
 - `compliance/aws/suppressions.py`: local JSON resource suppression catalog.
 - `templates/` + `static/`: C-SAGE ICICI-aligned enterprise UI.
@@ -38,14 +40,13 @@ The persistent host directory is mounted into the container at `/data`. Typical 
 
 ```text
 /data/accounts.json
-/data/lifecycle_rules.json
 /data/scan_runs.json
 /data/findings.json
 /data/inventory.json
 /data/suppressed_findings.json
 ```
 
-There is no S3 dependency for runtime configuration or suppression state.
+There is no S3 dependency for runtime configuration or suppression state, and no lifecycle rule file is maintained.
 
 Writes use atomic file replacement and a Linux file lock to reduce corruption risk on the single-host deployment.
 
@@ -69,18 +70,31 @@ The EC2 instance profile requires only the permissions necessary to assume the a
 
 ## Suppression flat file
 
-`/data/suppressed_findings.json` is the source of truth for resource exceptions. Each entry is keyed by the deterministic finding SHA-256 key and records:
+`/data/suppressed_findings.json` is the source of truth for resource exceptions. Each entry is keyed by the deterministic finding SHA-256 key and records suppression status, actor/reason, timestamps, rule/module, account, region, service, resource and severity details.
 
-- suppression status
-- actor and reason
-- suppression/update timestamps
-- rule ID and compliance module
-- account ID/name
-- region and AWS service
-- resource ID/type
-- severity, title and finding detail
+## AWS-native lifecycle discovery
 
-This makes suppression decisions auditable without a database or object store.
+C-SAGE deliberately does not maintain EOL/EOS dates or deprecated runtime versions locally.
+
+### Amazon EKS
+
+C-SAGE queries `DescribeClusterVersions` for the Kubernetes version used by each cluster. AWS returns version status, end of standard support and end of extended support dates. A cluster is flagged when standard support has ended or is within the configured warning window.
+
+### Amazon RDS / Aurora
+
+For open-source RDS/Aurora engines, C-SAGE queries `DescribeDBMajorEngineVersions`. AWS returns standard and, where available, extended-support lifecycle periods. C-SAGE evaluates the AWS-provided support dates against the warning window.
+
+### AWS Health
+
+C-SAGE queries AWS Health scheduled-change events for AWS-published deprecation, retirement, runtime, version, upgrade and end-of-support notifications, including affected entities. This provides lifecycle coverage for services that do not expose a dedicated support-date API.
+
+AWS Health Dashboard is visible in the console for AWS customers, while programmatic Health API access requires an eligible AWS Support plan. If Health API access returns `SubscriptionRequiredException`, C-SAGE records this as informational evidence and continues with service-native EKS/RDS lifecycle checks.
+
+### Lambda runtime lifecycle
+
+C-SAGE does not contain a hard-coded Lambda deprecated-runtime list. Lambda VPC compliance is still evaluated from the Lambda API, while runtime deprecation/EOS is derived from AWS Health scheduled-change events.
+
+`CSAGE_EOL_WARNING_DAYS` is only a policy threshold for how far ahead to alert; it contains no vendor lifecycle dates or version mappings.
 
 ## Production deployment
 
@@ -103,10 +117,6 @@ The C-SAGE EC2 execution role should have only:
 - `sts:AssumeRole` to the approved target audit role ARNs.
 - Required read/list permissions when scanning the hosting account directly.
 
-Target audit roles should be read-only and trusted only by the approved C-SAGE EC2 execution role. Do not attach administrative policies to the scanner role.
+Target audit roles should be read-only and trusted only by the approved C-SAGE EC2 execution role. The lifecycle scanner needs read-only `eks:DescribeClusterVersions`, `rds:DescribeDBEngineVersions`, `rds:DescribeDBMajorEngineVersions`, and AWS Health describe permissions in addition to the existing service inventory permissions.
 
 Protect the local data directory with Linux permissions, encrypted EBS, restricted administrative access, and backups because it contains account/role mappings and auditable suppression history.
-
-## Lifecycle catalog
-
-PaaS EOL/EOS dates are data-driven because vendor lifecycle dates change. Rules are maintained in `/data/lifecycle_rules.json` and evaluated using the configured warning window. This avoids hard-coding lifecycle dates into scanner code and avoids any database dependency.
