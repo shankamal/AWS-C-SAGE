@@ -1,7 +1,4 @@
-from datetime import date, datetime, timezone
-from pathlib import Path
-import json
-import os
+from datetime import datetime, timezone
 import uuid
 
 from .storage import store
@@ -12,15 +9,6 @@ def _parse_datetime(value):
         return value
     try:
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-    except ValueError:
-        return None
-
-
-def _parse_date(value):
-    if isinstance(value, date) or value is None:
-        return value
-    try:
-        return date.fromisoformat(str(value))
     except ValueError:
         return None
 
@@ -207,33 +195,3 @@ class ResourceInventoryManager:
 
 
 ResourceInventory.objects = ResourceInventoryManager()
-
-
-class LifecycleRule:
-    def __init__(self, service="", engine="", version="", eol_date=None, source_reference="", notes="", active=True, **kwargs):
-        self.service = service
-        self.engine = engine
-        self.version = str(version)
-        self.eol_date = _parse_date(eol_date)
-        self.source_reference = source_reference
-        self.notes = notes
-        self.active = bool(active)
-
-
-class LifecycleRuleManager:
-    def filter(self, active=True):
-        configured = os.getenv("CSAGE_LIFECYCLE_FILE", "").strip()
-        path = Path(configured) if configured else store.path("lifecycle_rules.json")
-        if not path.exists():
-            return []
-        try:
-            with path.open("r", encoding="utf-8") as handle:
-                payload = json.load(handle)
-            raw_rules = payload.get("rules", payload if isinstance(payload, list) else [])
-            rules = [LifecycleRule(**row) for row in raw_rules if isinstance(row, dict)]
-            return [rule for rule in rules if rule.active == active and rule.eol_date]
-        except (OSError, json.JSONDecodeError, TypeError, ValueError):
-            return []
-
-
-LifecycleRule.objects = LifecycleRuleManager()
