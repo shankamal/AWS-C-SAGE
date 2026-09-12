@@ -1,0 +1,36 @@
+/* ICICI Bank brand alignment for the C-SAGE application header.
+   The primary header orange is sampled from the supplied ICICI Bank logo. */
+:root{
+  --icici-brand-orange:#E36D1F;
+  --icici-brand-orange-dark:#C9561B;
+  --icici-brand-orange-light:#ED7A1B;
+}
+
+.icici-header{
+  background:linear-gradient(90deg,var(--icici-brand-orange-dark) 0%,var(--icici-brand-orange) 42%,var(--icici-brand-orange-light) 100%);
+  border-bottom:1px solid rgba(150,60,12,.24);
+  box-shadow:0 3px 10px rgba(92,38,8,.16);
+}
+
+.icici-logo-link{
+  background:transparent;
+}
+
+.icici-logo{
+  filter:none !important;
+}
+
+.icici-app-nav a:hover,
+.icici-app-nav a.active{
+  background:rgba(255,255,255,.10);
+  border-bottom-color:#fff;
+}
+
+.environment-pill{
+  background:rgba(118,44,8,.18);
+  border-color:rgba(255,255,255,.42);
+}
+
+.accessibility-controls{
+  background:rgba(105,37,6,.20);
+}
