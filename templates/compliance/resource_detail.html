@@ -1,0 +1,50 @@
+{% extends "compliance/base.html" %}
+{% block title %}C-SAGE | {{ resource.resource_type }}{% endblock %}
+{% block content %}
+<section class="page-heading resource-detail-heading">
+  <div>
+    <div class="eyebrow">MASTER INVENTORY RESOURCE</div>
+    <h1>{{ resource.resource_name|default:resource.resource_id }}</h1>
+    <p>{{ resource.service }} · {{ resource.resource_type }} · {{ resource.account_name }} · {{ resource.region }}</p>
+  </div>
+  <div class="heading-actions">
+    <a class="btn btn-outline" href="{% url 'inventory' %}">Back to Inventory</a>
+    <a class="btn btn-outline" href="{% url 'export_resource_json' resource.resource_key %}">Export JSON</a>
+    <a class="btn btn-primary" href="{% url 'export_resource_xlsx' resource.resource_key %}">Export Excel</a>
+  </div>
+</section>
+
+<section class="resource-overview-grid">
+  <article><span>Account</span><strong>{{ resource.account_name }}</strong><small>{{ resource.account_id }}</small></article>
+  <article><span>Region</span><strong>{{ resource.region }}</strong><small>{{ resource.discovery_source }}</small></article>
+  <article><span>Service</span><strong>{{ resource.service }}</strong><small>{{ resource.resource_type }}</small></article>
+  <article><span>Status</span><strong>{{ resource.status|default:"Not reported" }}</strong><small>{{ resource.creation_time|default:"Creation time not reported" }}</small></article>
+</section>
+
+<section class="panel resource-identifiers">
+  <div class="panel-head"><div><h2>Resource Identity</h2><p>Canonical identifiers captured during discovery.</p></div></div>
+  <div class="resource-fields">
+    <div><span>Resource Name</span><code>{{ resource.resource_name|default:"—" }}</code></div>
+    <div><span>Resource ID</span><code>{{ resource.resource_id }}</code></div>
+    <div><span>ARN</span><code>{{ resource.resource_arn|default:"—" }}</code></div>
+    <div><span>Resource Key</span><code>{{ resource.resource_key }}</code></div>
+  </div>
+</section>
+
+<section class="resource-json-grid">
+  <article class="panel json-panel"><div class="panel-head"><div><h2>Tags</h2><p>All tags returned by AWS.</p></div></div><pre>{{ pretty.tags }}</pre></article>
+  <article class="panel json-panel"><div class="panel-head"><div><h2>Networking</h2><p>VPC, subnet, routing, endpoint and network attributes.</p></div></div><pre>{{ pretty.networking }}</pre></article>
+  <article class="panel json-panel"><div class="panel-head"><div><h2>Security Configuration</h2><p>IAM, policy, encryption, access and security attributes.</p></div></div><pre>{{ pretty.security }}</pre></article>
+  <article class="panel json-panel"><div class="panel-head"><div><h2>Attached / Dependent Resources</h2><p>Relationships returned by the discovery API.</p></div></div><pre>{{ pretty.relationships }}</pre></article>
+</section>
+
+<section class="panel json-panel full-json-panel">
+  <div class="panel-head"><div><h2>Configuration Details</h2><p>Service configuration retained without summarization.</p></div></div>
+  <pre>{{ pretty.configuration }}</pre>
+</section>
+
+<section class="panel json-panel full-json-panel">
+  <div class="panel-head"><div><h2>Raw AWS API Attributes</h2><p>Complete API-returned payload retained for audit and engineering analysis.</p></div></div>
+  <pre>{{ pretty.raw_attributes }}</pre>
+</section>
+{% endblock %}
