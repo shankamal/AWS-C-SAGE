@@ -195,3 +195,14 @@ class ResourceInventoryManager:
 
 
 ResourceInventory.objects = ResourceInventoryManager()
+
+
+class _InactiveLifecycleRuleManager:
+    """Compatibility only for the legacy scanner module; no lifecycle data is stored or loaded locally."""
+
+    def filter(self, active=True):
+        return []
+
+
+class LifecycleRule:
+    objects = _InactiveLifecycleRuleManager()
