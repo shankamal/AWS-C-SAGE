@@ -33,10 +33,12 @@
         "config:BatchGetResourceConfig",
         "config:SelectResourceConfig",
 
+        "controltower:GetLandingZone",
         "controltower:ListLandingZones",
 
         "directconnect:DescribeConnections",
         "directconnect:DescribeDirectConnectGateways",
+        "directconnect:DescribeTags",
         "directconnect:DescribeVirtualInterfaces",
 
         "dms:DescribeReplicationInstances",
@@ -148,7 +150,9 @@
 
         "secretsmanager:ListSecrets",
 
+        "shield:DescribeProtection",
         "shield:ListProtections",
+        "shield:ListTagsForResource",
 
         "sns:ListSubscriptions",
         "sns:ListTopics",
