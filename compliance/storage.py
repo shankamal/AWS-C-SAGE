@@ -86,11 +86,18 @@ class FlatFileStore:
         return payload.get("findings", []) if isinstance(payload, dict) else []
 
     def write_inventory(self, rows):
-        self.write_json("inventory.json", {"version": 1, "inventory": rows})
+        self.write_json("inventory.json", {"version": 2, "inventory": rows})
 
     def read_inventory(self):
         payload = self.read_json("inventory.json", {"inventory": []})
         return payload.get("inventory", []) if isinstance(payload, dict) else []
+
+    def write_inventory_coverage(self, rows):
+        self.write_json("inventory_coverage.json", {"version": 1, "coverage": rows})
+
+    def read_inventory_coverage(self):
+        payload = self.read_json("inventory_coverage.json", {"coverage": []})
+        return payload.get("coverage", []) if isinstance(payload, dict) else []
 
 
 store = FlatFileStore()
