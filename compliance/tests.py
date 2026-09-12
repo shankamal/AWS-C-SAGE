@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 from .aws.config import AccountResolver
 from .aws.helpers import cidr_is_broad
+from .aws.orchestrator import ComplianceOrchestrator
 from .aws.suppressions import SuppressionStore, make_finding_key
+from .aws.types import InventoryData
+from .models import ResourceInventory
 from .storage import FlatFileStore
 
 
@@ -31,6 +34,91 @@ class ComplianceUtilityTests(TestCase):
             store.write_json("sample.json", {"value": 1})
             self.assertEqual(store.read_json("sample.json", {}), {"value": 1})
             self.assertTrue((Path(tmp) / "sample.json").exists())
+
+    def test_inventory_coverage_round_trip_including_zero_resources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = FlatFileStore(tmp)
+            rows = [{
+                "scan_run_id": "scan-1",
+                "account_id": "111122223333",
+                "account_name": "Production",
+                "region": "ap-south-1",
+                "service": "Redshift",
+                "resource_type": "Redshift Cluster",
+                "resource_count": 0,
+                "scan_status": "COMPLETE",
+                "message": "",
+                "source": "service-api",
+            }]
+            store.write_inventory_coverage(rows)
+            payload = store.read_inventory_coverage()
+            self.assertEqual(payload, rows)
+            self.assertEqual(payload[0]["resource_count"], 0)
+            self.assertEqual(payload[0]["scan_status"], "COMPLETE")
+
+    def test_rich_inventory_resource_serializes_all_sections(self):
+        resource = ResourceInventory(
+            scan_run_id="scan-1",
+            account_id="111122223333",
+            account_name="Production",
+            region="ap-south-1",
+            service="EC2",
+            resource_type="EC2 Instance",
+            resource_name="web-01",
+            resource_id="i-0123456789abcdef0",
+            resource_arn="arn:aws:ec2:ap-south-1:111122223333:instance/i-0123456789abcdef0",
+            status="running",
+            creation_time="2026-09-12T10:00:00+00:00",
+            tags={"Name": "web-01", "Environment": "Production"},
+            configuration={"InstanceType": "m6i.large"},
+            networking={"VpcId": "vpc-123", "SubnetId": "subnet-123"},
+            security={"SecurityGroups": [{"GroupId": "sg-123"}]},
+            relationships={"BlockDeviceMappings": [{"DeviceName": "/dev/xvda"}]},
+            raw_attributes={"InstanceId": "i-0123456789abcdef0", "Architecture": "x86_64"},
+            discovery_source="service-api",
+        )
+        row = resource.to_dict()
+        self.assertEqual(row["resource_name"], "web-01")
+        self.assertEqual(row["tags"]["Environment"], "Production")
+        self.assertEqual(row["configuration"]["InstanceType"], "m6i.large")
+        self.assertEqual(row["networking"]["VpcId"], "vpc-123")
+        self.assertEqual(row["security"]["SecurityGroups"][0]["GroupId"], "sg-123")
+        self.assertEqual(row["raw_attributes"]["Architecture"], "x86_64")
+        self.assertEqual(len(row["resource_key"]), 64)
+
+    def test_inventory_consolidation_merges_tagging_fallback(self):
+        arn = "arn:aws:ec2:ap-south-1:111122223333:volume/vol-123"
+        service_row = InventoryData(
+            account_id="111122223333",
+            account_name="Production",
+            region="ap-south-1",
+            service="EC2",
+            resource_type="EBS Volume",
+            resource_id="vol-123",
+            resource_arn=arn,
+            status="in-use",
+            configuration={"VolumeId": "vol-123", "Size": 100},
+            raw_attributes={"VolumeId": "vol-123", "Size": 100},
+            discovery_source="service-api",
+        )
+        tagging_row = InventoryData(
+            account_id="111122223333",
+            account_name="Production",
+            region="ap-south-1",
+            service="EC2",
+            resource_type="Tagged AWS Resource",
+            resource_id="vol-123",
+            resource_arn=arn,
+            tags={"Name": "data-volume", "Application": "Payments"},
+            configuration={"ResourceARN": arn},
+            raw_attributes={"ResourceARN": arn, "Tags": [{"Key": "Application", "Value": "Payments"}]},
+            discovery_source="resource-groups-tagging-api",
+        )
+        result = ComplianceOrchestrator._consolidate_inventory([service_row, tagging_row])
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].resource_type, "EBS Volume")
+        self.assertEqual(result[0].tags["Application"], "Payments")
+        self.assertIn("_supplemental_discovery", result[0].raw_attributes)
 
     def test_account_flat_file_parses_assume_role_metadata(self):
         target = AccountResolver._targets({
