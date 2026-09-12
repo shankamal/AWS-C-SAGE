@@ -14,12 +14,53 @@
   <article class="metric danger"><span>Non-Compliant</span><strong>{{ scan.non_compliant_count }}</strong><small>Action required</small></article>
   <article class="metric warning"><span>Suppressed</span><strong>{{ scan.suppressed_count }}</strong><small>Auditable exceptions</small></article>
 </section>
+
+<section class="dashboard-chart-grid">
+  <article class="panel chart-card">
+    <div class="panel-head"><div><h2>Compliance Posture</h2><p>Current control result distribution</p></div></div>
+    <div class="posture-chart-wrap">
+      <div class="posture-donut" style="background:conic-gradient(#1FA855 0 {{ posture.compliant_pct }}%, #DC3545 {{ posture.compliant_pct }}% {{ posture.non_compliant_end }}%, #F59E0B {{ posture.non_compliant_end }}% 100%);">
+        <div class="posture-donut-center"><strong>{{ posture.score }}%</strong><span>Compliant</span></div>
+      </div>
+      <div class="chart-legend">
+        <div><span class="legend-dot legend-success"></span><b>Compliant</b><strong>{{ posture.compliant }}</strong><small>{{ posture.compliant_pct }}%</small></div>
+        <div><span class="legend-dot legend-danger"></span><b>Non-Compliant</b><strong>{{ posture.non_compliant }}</strong><small>{{ posture.non_compliant_pct }}%</small></div>
+        <div><span class="legend-dot legend-warning"></span><b>Suppressed</b><strong>{{ posture.suppressed }}</strong><small>{{ posture.suppressed_pct }}%</small></div>
+      </div>
+    </div>
+  </article>
+
+  <article class="panel chart-card">
+    <div class="panel-head"><div><h2>Resources by AWS Service</h2><p>Top services in the latest Master Inventory</p></div><a href="{% url 'inventory' %}">View inventory →</a></div>
+    <div class="bar-chart-list">
+      {% for item in service_chart %}
+      <div class="bar-chart-row">
+        <div class="bar-chart-label"><span>{{ item.name }}</span><strong>{{ item.count }}</strong></div>
+        <div class="bar-track"><span class="bar-fill bar-fill-blue" style="width:{{ item.pct }}%"></span></div>
+      </div>
+      {% empty %}<div class="chart-empty">No inventory resources available.</div>{% endfor %}
+    </div>
+  </article>
+
+  <article class="panel chart-card">
+    <div class="panel-head"><div><h2>Findings by Severity</h2><p>Relative volume of findings by severity</p></div><a href="{% url 'findings' %}">View findings →</a></div>
+    <div class="bar-chart-list">
+      {% for item in severity_chart %}
+      <div class="bar-chart-row">
+        <div class="bar-chart-label"><span class="severity severity-{{ item.slug }}">{{ item.name }}</span><strong>{{ item.count }}</strong></div>
+        <div class="bar-track"><span class="bar-fill severity-bar-{{ item.slug }}" style="width:{{ item.pct }}%"></span></div>
+      </div>
+      {% empty %}<div class="chart-empty">No findings available.</div>{% endfor %}
+    </div>
+  </article>
+</section>
+
 <section class="grid-two">
   <article class="panel"><div class="panel-head"><div><h2>Compliance Modules</h2><p>Current posture by audit area</p></div><a href="{% url 'findings' %}">View grid →</a></div>
     <div class="module-list">{% for m in modules %}<div class="module-row"><span>{{ m.name }}</span><span>{{ m.total }} checks</span><span class="badge badge-danger">{{ m.non_compliant }} open</span><span class="badge badge-warning">{{ m.suppressed }} suppressed</span></div>{% empty %}<p>No module results available.</p>{% endfor %}</div>
   </article>
   <article class="panel"><div class="panel-head"><div><h2>Audit Exports</h2><p>Download consolidated evidence</p></div></div>
-    <div class="export-list"><a class="export-card" href="{% url 'export_inventory_xlsx' %}"><strong>Master Inventory</strong><span>Excel · all scanned resources</span></a><a class="export-card" href="{% url 'export_inventory_csv' %}"><strong>Master Inventory</strong><span>CSV · automation friendly</span></a><a class="export-card" href="{% url 'export_findings_csv' %}"><strong>Compliance Findings</strong><span>CSV · control-level results</span></a></div>
+    <div class="export-list"><a class="export-card" href="{% url 'export_inventory_xlsx' %}"><strong>Master Inventory</strong><span>Excel · all scanned resources with property columns</span></a><a class="export-card" href="{% url 'export_inventory_csv' %}"><strong>Master Inventory</strong><span>CSV · automation friendly</span></a><a class="export-card" href="{% url 'export_findings_csv' %}"><strong>Compliance Findings</strong><span>CSV · control-level results</span></a></div>
   </article>
 </section>
 <section class="panel"><div class="panel-head"><div><h2>Priority Findings</h2><p>Latest non-compliant and suppressed findings</p></div><a href="{% url 'findings' %}">View all →</a></div>
