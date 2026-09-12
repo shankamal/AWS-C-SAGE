@@ -38,5 +38,17 @@ class InventoryData:
     service: str
     resource_type: str
     resource_id: str
+    resource_name: str = ""
     resource_arn: str = ""
+    status: str = ""
+    creation_time: Any = ""
+    tags: dict[str, Any] = field(default_factory=dict)
+    configuration: dict[str, Any] = field(default_factory=dict)
+    networking: dict[str, Any] = field(default_factory=dict)
+    security: dict[str, Any] = field(default_factory=dict)
+    relationships: dict[str, Any] = field(default_factory=dict)
+    raw_attributes: dict[str, Any] = field(default_factory=dict)
+    discovery_source: str = "service-api"
+    resource_key: str = ""
+    # Kept for backwards compatibility with earlier C-SAGE inventory snapshots.
     metadata: dict[str, Any] = field(default_factory=dict)
