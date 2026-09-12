@@ -10,6 +10,7 @@ from compliance.storage import store
 from .config import AccountResolver
 from .inventory import discover_inventory
 from .lifecycle import scan_dynamic_lifecycle, scan_lambda_dynamic
+from .resource_explorer_inventory import discover_resource_explorer
 from .session import session_for
 from .scanners import SCANNERS
 from .suppressions import SuppressionStore, make_finding_key
@@ -39,6 +40,28 @@ class ComplianceOrchestrator:
         except Exception:
             return [self.home_region]
 
+    @staticmethod
+    def _merge_inventory(primary, fallback):
+        """Keep rich service/API records when Resource Explorer reports the same ARN."""
+        merged = list(primary)
+        known_arns = {str(item.resource_arn) for item in primary if getattr(item, "resource_arn", "")}
+        known_simple = {
+            (str(item.region).lower(), str(item.service).lower(), str(item.resource_id).lower())
+            for item in primary if getattr(item, "resource_id", "")
+        }
+        for item in fallback:
+            arn = str(getattr(item, "resource_arn", "") or "")
+            simple = (str(item.region).lower(), str(item.service).lower(), str(item.resource_id).lower())
+            if arn and arn in known_arns:
+                continue
+            if simple in known_simple:
+                continue
+            merged.append(item)
+            if arn:
+                known_arns.add(arn)
+            known_simple.add(simple)
+        return merged
+
     def _scan_account(self, target):
         session = session_for(target, self.base_session)
         regions = self._regions(session, target)
@@ -46,6 +69,9 @@ class ComplianceOrchestrator:
         # Master Inventory is independent from compliance findings. It deliberately records
         # zero-resource and access-denied coverage instead of silently omitting services.
         inventory, coverage = discover_inventory(session, target, regions, self.home_region)
+        explorer_inventory, explorer_coverage = discover_resource_explorer(session, target, regions)
+        inventory = self._merge_inventory(inventory, explorer_inventory)
+        coverage.extend(explorer_coverage)
 
         findings = []
         for scanner in ACTIVE_SCANNERS:
