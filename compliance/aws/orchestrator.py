@@ -7,11 +7,19 @@ from django.utils import timezone
 
 from compliance.models import Finding, ResourceInventory, ScanRun
 from .config import AccountResolver
+from .lifecycle import scan_dynamic_lifecycle, scan_lambda_dynamic
 from .session import session_for
 from .scanners import SCANNERS, scan_inventory
 from .suppressions import SuppressionStore, make_finding_key
 
 logger = logging.getLogger(__name__)
+
+# Replace the legacy rule-file EOL scanner and hard-coded Lambda runtime scanner
+# with AWS-native lifecycle discovery. All other existing compliance scanners stay unchanged.
+ACTIVE_SCANNERS = [
+    scanner for scanner in SCANNERS
+    if scanner.__name__ not in {"scan_eol", "scan_lambda"}
+] + [scan_dynamic_lifecycle, scan_lambda_dynamic]
 
 
 class ComplianceOrchestrator:
@@ -34,7 +42,7 @@ class ComplianceOrchestrator:
         regions = self._regions(session, target)
         inventory = scan_inventory(session, target, regions)
         findings = []
-        for scanner in SCANNERS:
+        for scanner in ACTIVE_SCANNERS:
             try:
                 findings.extend(scanner(session, target, regions))
             except Exception as exc:
