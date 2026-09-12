@@ -1,0 +1,121 @@
+{% extends "compliance/base.html" %}
+{% block title %}C-SAGE | Master Inventory{% endblock %}
+{% block content %}
+<section class="page-heading inventory-heading">
+  <div>
+    <div class="eyebrow">COMPLETE AWS DISCOVERY</div>
+    <h1>Master Inventory</h1>
+    <p>Resource-level inventory across all configured AWS accounts, regions and global services.</p>
+  </div>
+  <div class="heading-actions">
+    <a class="btn btn-outline" href="{% url 'export_inventory_csv' %}{% if export_query %}?{{ export_query }}{% endif %}">Export CSV</a>
+    <a class="btn btn-primary" href="{% url 'export_inventory_xlsx' %}{% if export_query %}?{{ export_query }}{% endif %}">Export Excel</a>
+  </div>
+</section>
+
+{% if scan %}
+<div class="inventory-kpis">
+  <article><span>Discovered Resources</span><strong>{{ total_count }}</strong><small>Latest scan</small></article>
+  <article><span>Filtered Resources</span><strong>{{ filtered_count }}</strong><small>Current view</small></article>
+  <article><span>Service / Type Coverage</span><strong>{{ coverage_count }}</strong><small>Includes zero-resource services</small></article>
+  <article><span>Zero Resource Types</span><strong>{{ zero_resource_count }}</strong><small>Explicitly retained</small></article>
+  <article class="{% if coverage_issue_count %}inventory-kpi-warning{% endif %}"><span>Coverage Issues</span><strong>{{ coverage_issue_count }}</strong><small>Access denied / unavailable / error</small></article>
+</div>
+
+<form class="filter-bar inventory-filter" method="get">
+  <label>Account
+    <select name="account">
+      <option value="">All Accounts</option>
+      {% for id,name in accounts %}<option value="{{ id }}" {% if filters.account == id %}selected{% endif %}>{{ name }} ({{ id }})</option>{% endfor %}
+    </select>
+  </label>
+  <label>Service
+    <select name="service">
+      <option value="">All Services</option>
+      {% for item in services %}<option value="{{ item }}" {% if filters.service == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Resource Type
+    <select name="resource_type">
+      <option value="">All Resource Types</option>
+      {% for item in resource_types %}<option value="{{ item }}" {% if filters.resource_type == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Region
+    <select name="region">
+      <option value="">All Regions</option>
+      {% for item in regions %}<option value="{{ item }}" {% if filters.region == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select>
+  </label>
+  <label>Status
+    <select name="status">
+      <option value="">All Statuses</option>
+      {% for item in statuses %}<option value="{{ item }}" {% if filters.status == item %}selected{% endif %}>{{ item }}</option>{% endfor %}
+    </select>
+  </label>
+  <label class="grow">Search
+    <input type="search" name="q" value="{{ filters.q }}" placeholder="Name, ID, ARN, account, service or resource type">
+  </label>
+  <button class="btn btn-primary" type="submit">Apply</button>
+  <a class="btn btn-outline" href="{% url 'inventory' %}">Reset</a>
+</form>
+
+<section class="panel inventory-panel">
+  <div class="panel-head">
+    <div><h2>Resources</h2><p>{{ filtered_count }} matching resource{{ filtered_count|pluralize }}. Each row can be viewed and exported independently.</p></div>
+    <div class="inventory-help">Scan #{{ scan.id }}</div>
+  </div>
+  <div class="table-wrap">
+    <table class="inventory-table">
+      <thead><tr><th>Account</th><th>Region</th><th>Service</th><th>Resource Type</th><th>Name / ID</th><th>Status</th><th>Creation Time</th><th>Source</th><th>Actions</th></tr></thead>
+      <tbody>
+      {% for r in page.object_list %}
+        <tr>
+          <td>{{ r.account_name }}<small>{{ r.account_id }}</small></td>
+          <td>{{ r.region }}</td>
+          <td><strong>{{ r.service }}</strong></td>
+          <td>{{ r.resource_type }}</td>
+          <td class="resource"><strong>{{ r.resource_name|default:"—" }}</strong><small>{{ r.resource_id }}</small>{% if r.resource_arn %}<small class="inventory-arn">{{ r.resource_arn }}</small>{% endif %}</td>
+          <td>{% if r.status %}<span class="inventory-status">{{ r.status }}</span>{% else %}—{% endif %}</td>
+          <td>{{ r.creation_time|default:"—" }}</td>
+          <td><span class="source-pill">{{ r.discovery_source }}</span></td>
+          <td class="inventory-actions"><a href="{% url 'resource_detail' r.resource_key %}">View</a><a href="{% url 'export_resource_xlsx' r.resource_key %}">Excel</a><a href="{% url 'export_resource_json' r.resource_key %}">JSON</a></td>
+        </tr>
+      {% empty %}
+        <tr><td colspan="9">No resources match the selected filters.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page.paginator.num_pages > 1 %}
+  <div class="pagination-bar">
+    <span>Page {{ page.number }} of {{ page.paginator.num_pages }}</span>
+    <div>
+      {% if page.has_previous %}<a class="btn btn-outline" href="?{% if query_without_page %}{{ query_without_page }}&{% endif %}page={{ page.previous_page_number }}">Previous</a>{% endif %}
+      {% if page.has_next %}<a class="btn btn-outline" href="?{% if query_without_page %}{{ query_without_page }}&{% endif %}page={{ page.next_page_number }}">Next</a>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</section>
+
+<section class="panel coverage-panel">
+  <div class="panel-head">
+    <div><h2>Inventory Coverage</h2><p>Services and resource types remain visible even when AWS returns zero resources. Access failures are never treated as empty.</p></div>
+  </div>
+  <div class="table-wrap coverage-table-wrap">
+    <table>
+      <thead><tr><th>Service</th><th>Resource Type</th><th>Resources</th><th>Accounts Checked</th><th>Regions Checked</th><th>Successful Checks</th><th>Access Denied</th><th>Other Issues</th></tr></thead>
+      <tbody>
+      {% for c in coverage %}
+        <tr class="{% if c.access_denied or c.errors %}coverage-issue{% elif c.resource_count == 0 %}coverage-empty{% endif %}">
+          <td><strong>{{ c.service }}</strong></td><td>{{ c.resource_type }}</td><td>{{ c.resource_count }}</td><td>{{ c.accounts }}</td><td>{{ c.regions }}</td><td>{{ c.complete }}</td><td>{{ c.access_denied }}</td><td>{{ c.errors }}</td>
+        </tr>
+      {% empty %}<tr><td colspan="8">Coverage information will be available after the next inventory scan.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% else %}
+<section class="empty-state"><div class="empty-icon">▦</div><h2>No Master Inventory yet</h2><p>Run an Audit Scan to discover AWS resources across all configured accounts.</p></section>
+{% endif %}
+{% endblock %}
