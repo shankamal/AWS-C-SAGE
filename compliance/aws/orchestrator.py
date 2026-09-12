@@ -9,6 +9,7 @@ from compliance.models import Finding, ResourceInventory, ScanRun
 from compliance.storage import store
 from .config import AccountResolver
 from .control_plane_inventory import discover_control_plane_inventory
+from .deleted_inventory import discover_deleted_inventory
 from .inventory import discover_inventory
 from .lifecycle import scan_dynamic_lifecycle, scan_lambda_dynamic
 from .resource_explorer_inventory import discover_resource_explorer
@@ -32,6 +33,7 @@ class ComplianceOrchestrator:
         self.max_workers = int(os.getenv("CSAGE_MAX_WORKERS", "8"))
         self.home_region = self.base_session.region_name or os.getenv("AWS_DEFAULT_REGION", "ap-south-1")
         self.inventory_all_regions = os.getenv("CSAGE_INVENTORY_ALL_REGIONS", "true").lower() == "true"
+        self.inventory_include_deleted = os.getenv("CSAGE_INVENTORY_INCLUDE_DELETED", "true").lower() == "true"
 
     def _regions(self, session, target):
         configured = set(target.regions or ())
@@ -157,9 +159,19 @@ class ComplianceOrchestrator:
         inventory, coverage = discover_inventory(session, target, regions, self.home_region)
         control_inventory, control_coverage = discover_control_plane_inventory(session, target, regions)
         explorer_inventory, explorer_coverage = discover_resource_explorer(session, target, regions)
-        inventory = self._consolidate_inventory(inventory, control_inventory, explorer_inventory)
+
+        deleted_inventory, deleted_coverage = [], []
+        if self.inventory_include_deleted:
+            deleted_inventory, deleted_coverage = discover_deleted_inventory(session, target, regions)
+
+        # Deleted Config-history rows use a dedicated service identity, so they remain distinct
+        # historical records rather than being merged into currently provisioned resources.
+        inventory = self._consolidate_inventory(
+            inventory, control_inventory, explorer_inventory, deleted_inventory
+        )
         coverage.extend(control_coverage)
         coverage.extend(explorer_coverage)
+        coverage.extend(deleted_coverage)
 
         findings = []
         for scanner in ACTIVE_SCANNERS:
