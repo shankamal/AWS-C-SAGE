@@ -19,18 +19,14 @@
   <header class="icici-header">
     <div class="wide-shell icici-header-inner">
       <a href="{% url 'dashboard' %}" class="icici-logo-link" aria-label="ICICI Bank C-SAGE home">
-        <img
-          class="icici-logo"
-          src="https://www.icici.bank.in/content/dam/icicibank/india/assets/images/header/logo.png"
-          alt="ICICI Bank"
-        >
+        <img class="icici-logo" src="https://www.icici.bank.in/content/dam/icicibank/india/assets/images/header/logo.png" alt="ICICI Bank">
         <span class="icici-logo-fallback">ICICI Bank</span>
       </a>
 
       <nav class="icici-app-nav" aria-label="C-SAGE primary navigation">
         <a class="{% if current == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">Cloud Posture</a>
+        <a class="{% if current == 'inventory' or current == 'resource_detail' %}active{% endif %}" href="{% url 'inventory' %}">Master Inventory</a>
         <a class="{% if current == 'findings' %}active{% endif %}" href="{% url 'findings' %}">Compliance</a>
-        <a href="{% url 'export_inventory_xlsx' %}">Inventory</a>
       </nav>
 
       <div class="icici-header-actions">
@@ -51,52 +47,24 @@
     <div class="wide-shell application-masthead-inner">
       <a href="{% url 'dashboard' %}" class="csage-identity">
         <span class="csage-symbol" aria-hidden="true">
-          <svg viewBox="0 0 64 64" role="img" focusable="false">
-            <path d="M20 47h26a12 12 0 0 0 1-24 16 16 0 0 0-30-5A12 12 0 0 0 20 47Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/>
-            <path d="m27 32 4 4 8-10" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <svg viewBox="0 0 64 64" role="img" focusable="false"><path d="M20 47h26a12 12 0 0 0 1-24 16 16 0 0 0-30-5A12 12 0 0 0 20 47Z" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round"/><path d="m27 32 4 4 8-10" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </span>
-        <span class="csage-name-block">
-          <strong>C-SAGE</strong>
-          <small>Cloud Security, Audit, Governance &amp; Enforcement</small>
-        </span>
+        <span class="csage-name-block"><strong>C-SAGE</strong><small>Cloud Security, Audit, Governance &amp; Enforcement</small></span>
       </a>
-
       <div class="masthead-divider" aria-hidden="true"></div>
-
-      <div class="masthead-title">
-        <strong>C-SAGE Compliance Cloud Grid</strong>
-        <span>Multi-account cloud compliance, audit evidence and governance for AWS</span>
-      </div>
-
-      <div class="security-banner">
-        <span><strong>Secure Clouds.</strong> Stronger Governance.</span>
-        <svg viewBox="0 0 48 48" aria-hidden="true">
-          <path d="M14 36h22a9 9 0 0 0 .7-18A12 12 0 0 0 14 14a9 9 0 0 0 0 22Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/>
-        </svg>
-      </div>
+      <div class="masthead-title"><strong>C-SAGE Compliance Cloud Grid</strong><span>Multi-account cloud compliance, complete inventory, audit evidence and governance for AWS</span></div>
+      <div class="security-banner"><span><strong>Secure Clouds.</strong> Stronger Governance.</span><svg viewBox="0 0 48 48" aria-hidden="true"><path d="M14 36h22a9 9 0 0 0 .7-18A12 12 0 0 0 14 14a9 9 0 0 0 0 22Z" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></div>
     </div>
 
     <div class="application-nav-wrap">
       <div class="wide-shell application-nav-row">
         <nav class="application-nav" aria-label="C-SAGE application navigation">
-          <a class="{% if current == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
-            <span class="nav-icon" aria-hidden="true">⌂</span> Dashboard
-          </a>
-          <a class="{% if current == 'findings' %}active{% endif %}" href="{% url 'findings' %}">
-            <span class="nav-icon" aria-hidden="true">◇</span> Compliance Grid
-          </a>
-          <a href="{% url 'export_inventory_xlsx' %}">
-            <span class="nav-icon" aria-hidden="true">▦</span> Master Inventory
-          </a>
-          <a href="{% url 'export_findings_csv' %}">
-            <span class="nav-icon" aria-hidden="true">⇩</span> Findings Report
-          </a>
+          <a class="{% if current == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon" aria-hidden="true">⌂</span> Dashboard</a>
+          <a class="{% if current == 'inventory' or current == 'resource_detail' %}active{% endif %}" href="{% url 'inventory' %}"><span class="nav-icon" aria-hidden="true">▦</span> Master Inventory</a>
+          <a class="{% if current == 'findings' %}active{% endif %}" href="{% url 'findings' %}"><span class="nav-icon" aria-hidden="true">◇</span> Compliance Grid</a>
+          <a href="{% url 'export_findings_csv' %}"><span class="nav-icon" aria-hidden="true">⇩</span> Findings Report</a>
         </nav>
-        <form class="masthead-scan-form" action="{% url 'run_scan' %}" method="post">
-          {% csrf_token %}
-          <button class="btn btn-primary scan-button" type="submit"><span aria-hidden="true">▶</span> Run Audit Scan</button>
-        </form>
+        <form class="masthead-scan-form" action="{% url 'run_scan' %}" method="post">{% csrf_token %}<button class="btn btn-primary scan-button" type="submit"><span aria-hidden="true">▶</span> Run Audit Scan</button></form>
       </div>
     </div>
   </section>
@@ -107,12 +75,7 @@
     {% block content %}{% endblock %}
   </main>
 
-  <footer class="footer">
-    <div class="shell footer-inner">
-      <div><strong>C-SAGE</strong> · Enterprise Cloud Compliance &amp; Governance</div>
-      <div>ICICI Bank digital visual standard alignment · Internal use</div>
-    </div>
-  </footer>
+  <footer class="footer"><div class="shell footer-inner"><div><strong>C-SAGE</strong> · Enterprise Cloud Compliance &amp; Governance</div><div>ICICI Bank digital visual standard alignment · Internal use</div></div></footer>
   <script src="{% static 'compliance/csage.js' %}"></script>
 </body>
 </html>
