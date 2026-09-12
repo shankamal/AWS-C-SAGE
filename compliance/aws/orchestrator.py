@@ -41,25 +41,95 @@ class ComplianceOrchestrator:
             return [self.home_region]
 
     @staticmethod
-    def _merge_inventory(primary, fallback):
-        """Keep rich service/API records when Resource Explorer reports the same ARN."""
-        merged = list(primary)
-        known_arns = {str(item.resource_arn) for item in primary if getattr(item, "resource_arn", "")}
-        known_simple = {
-            (str(item.region).lower(), str(item.service).lower(), str(item.resource_id).lower())
-            for item in primary if getattr(item, "resource_id", "")
-        }
-        for item in fallback:
-            arn = str(getattr(item, "resource_arn", "") or "")
-            simple = (str(item.region).lower(), str(item.service).lower(), str(item.resource_id).lower())
-            if arn and arn in known_arns:
-                continue
-            if simple in known_simple:
-                continue
-            merged.append(item)
-            if arn:
-                known_arns.add(arn)
-            known_simple.add(simple)
+    def _identity_keys(item):
+        """Return identities that can correlate service, Config, Tagging and Resource Explorer records."""
+        keys = []
+        arn = str(getattr(item, "resource_arn", "") or "").strip().lower()
+        region = str(getattr(item, "region", "") or "global").strip().lower()
+        service = str(getattr(item, "service", "") or "aws").strip().lower()
+        resource_id = str(getattr(item, "resource_id", "") or "").strip().lower()
+        if arn:
+            # ARN is globally unique within an account for the same provisioned resource.
+            keys.append(("arn", arn))
+            arn_tail = arn.rsplit("/", 1)[-1].rsplit(":", 1)[-1]
+            if arn_tail:
+                keys.append(("simple", region, service, arn_tail))
+        if resource_id:
+            keys.append(("simple", region, service, resource_id))
+        return keys
+
+    @staticmethod
+    def _merge_dict(target, source):
+        if not isinstance(target, dict):
+            target = {}
+        if isinstance(source, dict):
+            for key, value in source.items():
+                if key not in target or target[key] in (None, "", [], {}):
+                    target[key] = value
+        return target
+
+    @classmethod
+    def _consolidate_inventory(cls, *groups):
+        """
+        Produce one row per resource while retaining evidence from every discovery source.
+
+        Service-specific API rows are added first and therefore remain canonical. AWS Config,
+        Resource Groups Tagging API and Resource Explorer records enrich those rows instead of
+        creating duplicate resources. Tags are merged even when the fallback record is smaller.
+        """
+        merged = []
+        identity_map = {}
+
+        for group in groups:
+            for item in group:
+                existing = None
+                for identity in cls._identity_keys(item):
+                    if identity in identity_map:
+                        existing = identity_map[identity]
+                        break
+
+                if existing is None:
+                    merged.append(item)
+                    for identity in cls._identity_keys(item):
+                        identity_map[identity] = item
+                    continue
+
+                # Merge common fields without replacing richer service-specific values.
+                if not getattr(existing, "resource_name", "") and getattr(item, "resource_name", ""):
+                    existing.resource_name = item.resource_name
+                if not getattr(existing, "resource_arn", "") and getattr(item, "resource_arn", ""):
+                    existing.resource_arn = item.resource_arn
+                if not getattr(existing, "status", "") and getattr(item, "status", ""):
+                    existing.status = item.status
+                if not getattr(existing, "creation_time", "") and getattr(item, "creation_time", ""):
+                    existing.creation_time = item.creation_time
+
+                existing.tags = cls._merge_dict(getattr(existing, "tags", {}), getattr(item, "tags", {}))
+                existing.networking = cls._merge_dict(getattr(existing, "networking", {}), getattr(item, "networking", {}))
+                existing.security = cls._merge_dict(getattr(existing, "security", {}), getattr(item, "security", {}))
+                existing.relationships = cls._merge_dict(getattr(existing, "relationships", {}), getattr(item, "relationships", {}))
+
+                incoming_source = str(getattr(item, "discovery_source", "") or "unknown")
+                incoming_raw = getattr(item, "raw_attributes", {}) or {}
+                existing_raw = getattr(existing, "raw_attributes", {}) or {}
+                if isinstance(existing_raw, dict) and incoming_raw:
+                    supplemental = existing_raw.setdefault("_supplemental_discovery", {})
+                    source_payloads = supplemental.setdefault(incoming_source, [])
+                    if incoming_raw not in source_payloads:
+                        source_payloads.append(incoming_raw)
+                    existing.raw_attributes = existing_raw
+
+                # Config can fill gaps in the normalized configuration while the original raw
+                # payload remains preserved under _supplemental_discovery.
+                existing.configuration = cls._merge_dict(
+                    getattr(existing, "configuration", {}), getattr(item, "configuration", {})
+                )
+
+                # Register identities learned from the enrichment record (for example an ARN
+                # discovered by Config/Tagging when the service API only returned an ID).
+                for identity in cls._identity_keys(existing) + cls._identity_keys(item):
+                    identity_map[identity] = existing
+
         return merged
 
     def _scan_account(self, target):
@@ -70,7 +140,7 @@ class ComplianceOrchestrator:
         # zero-resource and access-denied coverage instead of silently omitting services.
         inventory, coverage = discover_inventory(session, target, regions, self.home_region)
         explorer_inventory, explorer_coverage = discover_resource_explorer(session, target, regions)
-        inventory = self._merge_inventory(inventory, explorer_inventory)
+        inventory = self._consolidate_inventory(inventory, explorer_inventory)
         coverage.extend(explorer_coverage)
 
         findings = []
