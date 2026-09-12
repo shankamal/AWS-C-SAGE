@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import hashlib
 import uuid
 
 from .storage import store
@@ -11,6 +12,13 @@ def _parse_datetime(value):
         return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def _inventory_key(account_id, region, service, resource_type, resource_id, resource_arn=""):
+    basis = "|".join([
+        str(account_id), str(region), str(service), str(resource_type), str(resource_arn or resource_id)
+    ])
+    return hashlib.sha256(basis.encode("utf-8")).hexdigest()
 
 
 class ScanRun:
@@ -157,7 +165,9 @@ Finding.objects = FindingManager()
 
 class ResourceInventory:
     def __init__(self, scan_run=None, scan_run_id=None, account_id="", account_name="", region="", service="",
-                 resource_type="", resource_id="", resource_arn="", metadata=None):
+                 resource_type="", resource_id="", resource_name="", resource_arn="", status="", creation_time="",
+                 tags=None, configuration=None, networking=None, security=None, relationships=None, raw_attributes=None,
+                 discovery_source="service-api", resource_key="", metadata=None, **kwargs):
         self.scan_run = scan_run
         self.scan_run_id = scan_run_id or getattr(scan_run, "id", "")
         self.account_id = account_id
@@ -166,19 +176,43 @@ class ResourceInventory:
         self.service = service
         self.resource_type = resource_type
         self.resource_id = resource_id
-        self.resource_arn = resource_arn
+        self.resource_name = resource_name or ""
+        self.resource_arn = resource_arn or ""
+        self.status = status or ""
+        self.creation_time = creation_time or ""
+        self.tags = tags or {}
+        self.configuration = configuration or {}
+        self.networking = networking or {}
+        self.security = security or {}
+        self.relationships = relationships or {}
+        self.raw_attributes = raw_attributes or metadata or {}
+        self.discovery_source = discovery_source or "service-api"
         self.metadata = metadata or {}
+        self.resource_key = resource_key or _inventory_key(
+            account_id, region, service, resource_type, resource_id, resource_arn
+        )
 
     def to_dict(self):
         return {
             "scan_run_id": self.scan_run_id,
+            "resource_key": self.resource_key,
             "account_id": self.account_id,
             "account_name": self.account_name,
             "region": self.region,
             "service": self.service,
             "resource_type": self.resource_type,
+            "resource_name": self.resource_name,
             "resource_id": self.resource_id,
             "resource_arn": self.resource_arn,
+            "status": self.status,
+            "creation_time": self.creation_time,
+            "tags": self.tags,
+            "configuration": self.configuration,
+            "networking": self.networking,
+            "security": self.security,
+            "relationships": self.relationships,
+            "raw_attributes": self.raw_attributes,
+            "discovery_source": self.discovery_source,
             "metadata": self.metadata,
         }
 
@@ -192,6 +226,16 @@ class ResourceInventoryManager:
         if not scan:
             return []
         return [ResourceInventory(scan_run=scan, **row) for row in store.read_inventory() if row.get("scan_run_id") == scan.id]
+
+    def by_key(self, scan, resource_key):
+        if not scan:
+            return None
+        for row in store.read_inventory():
+            if row.get("scan_run_id") == scan.id:
+                resource = ResourceInventory(scan_run=scan, **row)
+                if resource.resource_key == resource_key:
+                    return resource
+        return None
 
 
 ResourceInventory.objects = ResourceInventoryManager()
