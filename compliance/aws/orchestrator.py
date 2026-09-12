@@ -30,15 +30,30 @@ class ComplianceOrchestrator:
         self.base_session = boto3.Session()
         self.max_workers = int(os.getenv("CSAGE_MAX_WORKERS", "8"))
         self.home_region = self.base_session.region_name or os.getenv("AWS_DEFAULT_REGION", "ap-south-1")
+        self.inventory_all_regions = os.getenv("CSAGE_INVENTORY_ALL_REGIONS", "true").lower() == "true"
 
     def _regions(self, session, target):
-        if target.regions:
-            return list(target.regions)
+        configured = set(target.regions or ())
+        discovered = set()
         try:
             ec2 = session.client("ec2", region_name=self.home_region)
-            return sorted(r["RegionName"] for r in ec2.describe_regions(AllRegions=False).get("Regions", []))
-        except Exception:
-            return [self.home_region]
+            discovered = {
+                r["RegionName"]
+                for r in ec2.describe_regions(AllRegions=False).get("Regions", [])
+                if r.get("RegionName")
+            }
+        except Exception as exc:
+            logger.warning("Enabled Region discovery failed for %s: %s", target.account_id, exc)
+
+        # Complete Master Inventory defaults to every enabled Region. The configured Region list
+        # is preserved as an explicit fallback/union so a newly configured Region is never lost.
+        if self.inventory_all_regions and discovered:
+            return sorted(discovered | configured)
+        if configured:
+            return sorted(configured)
+        if discovered:
+            return sorted(discovered)
+        return [self.home_region]
 
     @staticmethod
     def _identity_keys(item):
