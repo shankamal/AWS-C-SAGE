@@ -9,4 +9,13 @@
 .policy-tooltip-meta{display:flex;flex-wrap:wrap;gap:6px 10px;margin-top:9px;padding-top:8px;border-top:1px solid rgba(255,255,255,.16);color:#BDD0E5;font-size:10px}
 .policy-tooltip:hover .policy-tooltip-card,.policy-tooltip:focus-within .policy-tooltip-card{opacity:1;visibility:visible;transform:translateY(0)}
 .policy-tooltip:hover .policy-name,.policy-tooltip:focus-within .policy-name{color:#C9561B}
-@media(max-width:700px){.policy-tooltip-card{position:fixed;left:14px;right:14px;top:auto;bottom:18px;width:auto}.policy-tooltip-card::before{display:none}}
+
+/* Dashboard Compliance Modules: show a compact preview of the policies in each module. */
+.module-policy-tooltip .policy-tooltip-card{width:min(500px,76vw)}
+.module-policy-list{display:flex;flex-direction:column;gap:9px;margin-top:10px}
+.module-policy-item{padding:9px 10px;border-radius:7px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.09)}
+.module-policy-item b{display:block;color:#fff;font-size:11px;line-height:1.35;margin-bottom:3px}
+.module-policy-item span{display:block;color:#E7EEF6;font-size:10.5px;line-height:1.45;white-space:normal}
+.module-policy-item small{display:block;margin-top:5px;color:#AFC6DE;font-size:9.5px;line-height:1.35}
+
+@media(max-width:700px){.policy-tooltip-card{position:fixed;left:14px;right:14px;top:auto;bottom:18px;width:auto}.policy-tooltip-card::before{display:none}.module-policy-tooltip .policy-tooltip-card{width:auto}}
