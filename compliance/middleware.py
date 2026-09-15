@@ -28,7 +28,8 @@ class BasicAuthMiddleware:
         self.disable_auth = os.getenv("CSAGE_DISABLE_AUTH", "false").lower() == "true"
 
     def __call__(self, request):
-        if request.path == "/healthz/" or request.path.startswith("/static/"):
+        # /admin/ has its own dedicated signed-cookie administrator authentication.
+        if request.path == "/healthz/" or request.path.startswith("/static/") or request.path.startswith("/admin/"):
             return self.get_response(request)
 
         if self.disable_auth:
