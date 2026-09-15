@@ -12,7 +12,7 @@
 {% if not admin_authenticated %}
 <section class="admin-login-card panel">
   <div class="panel-head"><div><h2>Administrator Sign In</h2><p>Use the dedicated C-SAGE administrator credential.</p></div></div>
-  <form method="post" class="admin-login-form">
+  <form method="post" action="{% url 'csage_admin' %}" class="admin-login-form">
     {% csrf_token %}
     <input type="hidden" name="action" value="login">
     {% if login_error %}<div class="admin-error">{{ login_error }}</div>{% endif %}
@@ -24,7 +24,7 @@
 {% else %}
 <div class="admin-toolbar">
   <div><strong>Signed in as {{ admin_username }}</strong><small>Policy state: {{ policy_file }} · Account configuration: {{ accounts_path }}</small></div>
-  <form method="post">{% csrf_token %}<input type="hidden" name="action" value="logout"><button class="btn btn-outline" type="submit">Sign Out</button></form>
+  <form method="post" action="{% url 'csage_admin' %}">{% csrf_token %}<input type="hidden" name="action" value="logout"><button class="btn btn-outline" type="submit">Sign Out</button></form>
 </div>
 
 <section class="admin-grid">
@@ -42,7 +42,7 @@
             <td>{% if p.severity %}<span class="severity severity-{{ p.severity|lower }}">{{ p.severity }}</span>{% else %}—{% endif %}</td>
             <td>{% if p.enabled %}<span class="badge badge-compliant">ENABLED</span>{% else %}<span class="badge badge-danger">DISABLED</span>{% endif %}</td>
             <td>
-              <form method="post">
+              <form method="post" action="{% url 'csage_admin' %}">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="toggle_policy">
                 <input type="hidden" name="rule_id" value="{{ p.rule_id }}">
@@ -65,7 +65,7 @@
 
   <article class="panel admin-account-panel">
     <div class="panel-head"><div><h2>AWS Accounts</h2><p>Add accounts to the local accounts.json file. C-SAGE will use them on the next audit scan.</p></div></div>
-    <form method="post" class="admin-account-form">
+    <form method="post" action="{% url 'csage_admin' %}" class="admin-account-form">
       {% csrf_token %}
       <input type="hidden" name="action" value="add_account">
       <label>Account ID<input type="text" name="account_id" inputmode="numeric" maxlength="12" pattern="[0-9]{12}" placeholder="123456789012" required></label>
@@ -85,7 +85,7 @@
             <td class="resource">{{ account.role_arn|default:"Default ComplianceAuditRole" }}</td>
             <td>{% if account.regions %}{{ account.regions|join:", " }}{% else %}All enabled regions{% endif %}</td>
             <td>
-              <form method="post" onsubmit="return confirm('Remove this AWS account from C-SAGE?');">
+              <form method="post" action="{% url 'csage_admin' %}" onsubmit="return confirm('Remove this AWS account from C-SAGE?');">
                 {% csrf_token %}
                 <input type="hidden" name="action" value="remove_account">
                 <input type="hidden" name="account_id" value="{{ account.account_id }}">
