@@ -59,6 +59,25 @@ def _inventory_filters(request, rows):
     }
 
 
+def _module_policy_preview(module_findings, limit=4):
+    """Return unique policy/control descriptions for dashboard hover help."""
+    unique = {}
+    for finding in module_findings:
+        key = (finding.rule_id or finding.title, finding.title)
+        if key in unique:
+            continue
+        unique[key] = {
+            "rule_id": finding.rule_id,
+            "title": finding.title,
+            "details": finding.details,
+            "service": finding.service,
+            "severity": finding.severity,
+        }
+
+    policies = sorted(unique.values(), key=lambda item: ((item["rule_id"] or "").lower(), (item["title"] or "").lower()))
+    return policies[:limit], len(policies)
+
+
 def dashboard(request):
     scan = _latest()
     findings = Finding.objects.for_scan(scan)
@@ -67,11 +86,14 @@ def dashboard(request):
     modules = []
     for name in sorted({f.module for f in findings}):
         module_findings = [f for f in findings if f.module == name]
+        policy_preview, policy_count = _module_policy_preview(module_findings)
         modules.append({
             "name": name,
             "total": len(module_findings),
             "non_compliant": sum(1 for f in module_findings if f.status == Finding.Status.NON_COMPLIANT),
             "suppressed": sum(1 for f in module_findings if f.status == Finding.Status.SUPPRESSED),
+            "policies": policy_preview,
+            "policy_count": policy_count,
         })
     modules.sort(key=lambda item: (-item["non_compliant"], item["name"].lower()))
 
