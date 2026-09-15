@@ -147,6 +147,15 @@ class Finding:
 
 class FindingManager:
     def bulk_create(self, rows, batch_size=None):
+        # Always learn the discovered policy catalog, including disabled policies,
+        # then remove disabled rule IDs before persisting findings. Mutating the
+        # caller's list also keeps scan-level compliant/non-compliant counts accurate.
+        from .policy_config import PolicyConfigStore
+
+        policy_store = PolicyConfigStore()
+        policy_store.remember_findings(rows)
+        disabled = policy_store.disabled_rule_ids()
+        rows[:] = [row for row in rows if row.rule_id not in disabled]
         store.write_findings([row.to_dict() for row in rows])
         return rows
 
