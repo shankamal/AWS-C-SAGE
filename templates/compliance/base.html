@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="{% static 'compliance/inventory.css' %}">
   <link rel="stylesheet" href="{% static 'compliance/brand.css' %}">
   <link rel="stylesheet" href="{% static 'compliance/compliance-tooltips.css' %}">
+  <link rel="stylesheet" href="{% static 'compliance/admin.css' %}">
 </head>
 <body>
   <div class="trust-strip">
@@ -57,6 +58,7 @@
           <a class="{% if current == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon" aria-hidden="true">⌂</span> Dashboard</a>
           <a class="{% if current == 'inventory' or current == 'resource_detail' %}active{% endif %}" href="{% url 'inventory' %}"><span class="nav-icon" aria-hidden="true">▦</span> Master Inventory</a>
           <a class="{% if current == 'findings' %}active{% endif %}" href="{% url 'findings' %}"><span class="nav-icon" aria-hidden="true">◇</span> Compliance Grid</a>
+          <a class="{% if current == 'csage_admin' %}active{% endif %}" href="{% url 'csage_admin' %}"><span class="nav-icon" aria-hidden="true">⚙</span> Admin</a>
           <a href="{% url 'export_findings_csv' %}"><span class="nav-icon" aria-hidden="true">⇩</span> Findings Report</a>
         </nav>
         <form class="masthead-scan-form" action="{% url 'run_scan' %}" method="post">{% csrf_token %}<button class="btn btn-primary scan-button" type="submit"><span aria-hidden="true">▶</span> Run Audit Scan</button></form>
