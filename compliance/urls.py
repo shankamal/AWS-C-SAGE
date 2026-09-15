@@ -1,5 +1,5 @@
 from django.urls import path
-from . import admin_views, enhanced_views, views
+from . import admin_views, enhanced_views, findings_views, views
 
 urlpatterns = [
     path("", enhanced_views.dashboard, name="dashboard"),
@@ -10,7 +10,7 @@ urlpatterns = [
     path("admin/", admin_views.admin_console, name="csage_admin"),
     path("admin/login", admin_views.admin_console, name="csage_admin_login_no_slash"),
     path("admin/login/", admin_views.admin_console, name="csage_admin_login"),
-    path("findings/", views.findings_view, name="findings"),
+    path("findings/", findings_views.findings_view, name="findings"),
     path("inventory/", enhanced_views.inventory_view, name="inventory"),
     path("inventory/<str:resource_key>/", views.resource_detail, name="resource_detail"),
     path("inventory/<str:resource_key>/export.xlsx", views.export_resource_xlsx, name="export_resource_xlsx"),
