@@ -10,8 +10,33 @@
   <button class="btn btn-primary" type="submit">Search</button>
   <a class="btn btn-outline" href="{% url 'findings' %}">Reset</a>
 </form>
-<section class="panel"><div class="panel-head"><div><h2>Findings</h2><p>Up to 1,000 matching records are shown. Use export for the full dataset.</p></div></div>
-<div class="table-wrap"><table><thead><tr><th>Rule / Module</th><th>Account</th><th>Region</th><th>Service</th><th>Resource</th><th>Finding</th><th>Severity</th><th>Status</th><th>Action</th></tr></thead><tbody>
-{% for f in findings %}<tr><td><strong>{{ f.rule_id }}</strong><small>{{ f.module }}</small></td><td>{{ f.account_name }}<small>{{ f.account_id }}</small></td><td>{{ f.region }}</td><td>{{ f.service }}</td><td class="resource">{{ f.resource_id }}<small>{{ f.resource_type }}</small></td><td>{{ f.title }}<small>{{ f.details }}</small></td><td><span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></td><td><span class="badge badge-{{ f.status|lower|cut:'_' }}">{{ f.get_status_display }}</span></td><td>{% if f.status != 'COMPLIANT' and f.status != 'ERROR' %}<form method="post" action="{% url 'toggle_suppression' f.id %}">{% csrf_token %}<button class="link-button" type="submit">{% if f.status == 'SUPPRESSED' %}Unsuppress{% else %}Suppress{% endif %}</button></form>{% else %}—{% endif %}</td></tr>{% empty %}<tr><td colspan="9">No findings match the selected filters.</td></tr>{% endfor %}
+<section class="panel"><div class="panel-head"><div><h2>Findings</h2><p>Up to 1,000 matching records are shown. Hover over a policy name for a short description and control context.</p></div></div>
+<div class="table-wrap"><table><thead><tr><th>Rule / Module</th><th>Account</th><th>Region</th><th>Service</th><th>Resource</th><th>Policy / Finding</th><th>Severity</th><th>Status</th><th>Action</th></tr></thead><tbody>
+{% for f in findings %}<tr>
+<td><strong>{{ f.rule_id }}</strong><small>{{ f.module }}</small></td>
+<td>{{ f.account_name }}<small>{{ f.account_id }}</small></td>
+<td>{{ f.region }}</td>
+<td>{{ f.service }}</td>
+<td class="resource">{{ f.resource_id }}<small>{{ f.resource_type }}</small></td>
+<td>
+  <div class="policy-tooltip">
+    <span class="policy-name" tabindex="0" aria-describedby="policy-tip-{{ forloop.counter }}">{{ f.title }}</span>
+    <div class="policy-tooltip-card" id="policy-tip-{{ forloop.counter }}" role="tooltip">
+      <strong>{{ f.title }}</strong>
+      <p>{% if f.details %}{{ f.details }}{% else %}This control validates the selected AWS resource against the C-SAGE compliance requirement and reports deviations that require review or remediation.{% endif %}</p>
+      <div class="policy-tooltip-meta">
+        <span>Rule: {{ f.rule_id }}</span>
+        <span>Module: {{ f.module }}</span>
+        <span>Service: {{ f.service }}</span>
+        <span>Severity: {{ f.severity }}</span>
+      </div>
+    </div>
+  </div>
+  <small>{{ f.details }}</small>
+</td>
+<td><span class="severity severity-{{ f.severity|lower }}">{{ f.severity }}</span></td>
+<td><span class="badge badge-{{ f.status|lower|cut:'_' }}">{{ f.get_status_display }}</span></td>
+<td>{% if f.status != 'COMPLIANT' and f.status != 'ERROR' %}<form method="post" action="{% url 'toggle_suppression' f.id %}">{% csrf_token %}<button class="link-button" type="submit">{% if f.status == 'SUPPRESSED' %}Unsuppress{% else %}Suppress{% endif %}</button></form>{% else %}—{% endif %}</td>
+</tr>{% empty %}<tr><td colspan="9">No findings match the selected filters.</td></tr>{% endfor %}
 </tbody></table></div></section>
 {% endblock %}
