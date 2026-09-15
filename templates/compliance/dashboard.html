@@ -56,8 +56,36 @@
 </section>
 
 <section class="grid-two">
-  <article class="panel"><div class="panel-head"><div><h2>Compliance Modules</h2><p>Current posture by audit area</p></div><a href="{% url 'findings' %}">View grid →</a></div>
-    <div class="module-list">{% for m in modules %}<div class="module-row"><span>{{ m.name }}</span><span>{{ m.total }} checks</span><span class="badge badge-danger">{{ m.non_compliant }} open</span><span class="badge badge-warning">{{ m.suppressed }} suppressed</span></div>{% empty %}<p>No module results available.</p>{% endfor %}</div>
+  <article class="panel">
+    <div class="panel-head"><div><h2>Compliance Modules</h2><p>Current posture by audit area. Hover over a module name to see the policies it contains.</p></div><a href="{% url 'findings' %}">View grid →</a></div>
+    <div class="module-list">
+      {% for m in modules %}
+      <div class="module-row">
+        <div class="policy-tooltip module-policy-tooltip">
+          <span class="policy-name" tabindex="0" aria-describedby="module-tip-{{ forloop.counter }}">{{ m.name }}</span>
+          <div class="policy-tooltip-card" id="module-tip-{{ forloop.counter }}" role="tooltip">
+            <strong>{{ m.name }} compliance module</strong>
+            <p>This module contains {{ m.policy_count }} unique C-SAGE polic{{ m.policy_count|pluralize:"y,ies" }}. The descriptions below are taken from the latest scan results.</p>
+            <div class="module-policy-list">
+              {% for p in m.policies %}
+              <div class="module-policy-item">
+                <b>{{ p.title }}</b>
+                <span>{% if p.details %}{{ p.details|truncatechars:220 }}{% else %}This policy validates AWS resources against the C-SAGE compliance requirement and identifies deviations requiring review or remediation.{% endif %}</span>
+                <small>{{ p.rule_id }}{% if p.service %} · {{ p.service }}{% endif %}{% if p.severity %} · {{ p.severity }}{% endif %}</small>
+              </div>
+              {% empty %}
+              <div class="module-policy-item"><span>No policy description is available for this module in the latest scan.</span></div>
+              {% endfor %}
+            </div>
+            {% if m.policy_count > m.policies|length %}<div class="policy-tooltip-meta"><span>Showing {{ m.policies|length }} of {{ m.policy_count }} policies</span><span>Open Compliance Grid for all controls</span></div>{% endif %}
+          </div>
+        </div>
+        <span>{{ m.total }} checks</span>
+        <span class="badge badge-danger">{{ m.non_compliant }} open</span>
+        <span class="badge badge-warning">{{ m.suppressed }} suppressed</span>
+      </div>
+      {% empty %}<p>No module results available.</p>{% endfor %}
+    </div>
   </article>
   <article class="panel"><div class="panel-head"><div><h2>Audit Exports</h2><p>Download consolidated evidence</p></div></div>
     <div class="export-list"><a class="export-card" href="{% url 'export_inventory_xlsx' %}"><strong>Master Inventory</strong><span>Excel · all scanned resources with property columns</span></a><a class="export-card" href="{% url 'export_inventory_csv' %}"><strong>Master Inventory</strong><span>CSV · automation friendly</span></a><a class="export-card" href="{% url 'export_findings_csv' %}"><strong>Compliance Findings</strong><span>CSV · control-level results</span></a></div>
