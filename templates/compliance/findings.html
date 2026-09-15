@@ -5,12 +5,40 @@
 <form class="filter-bar" method="get">
   <label>Account<select name="account"><option value="">All Accounts</option>{% for id,name in accounts %}<option value="{{ id }}" {% if filters.account == id %}selected{% endif %}>{{ name }} ({{ id }})</option>{% endfor %}</select></label>
   <label>Module<select name="module"><option value="">All Modules</option>{% for m in module_names %}<option value="{{ m }}" {% if filters.module == m %}selected{% endif %}>{{ m }}</option>{% endfor %}</select></label>
+  <label>Policy<select name="policy"><option value="">All Policies</option>{% for p in policies %}<option value="{{ p.rule_id }}" {% if filters.policy == p.rule_id %}selected{% endif %}>{{ p.rule_id }} — {{ p.title|truncatechars:55 }}</option>{% endfor %}</select></label>
   <label>Status<select name="status"><option value="">All Statuses</option><option value="COMPLIANT" {% if filters.status == 'COMPLIANT' %}selected{% endif %}>COMPLIANT</option><option value="NON_COMPLIANT" {% if filters.status == 'NON_COMPLIANT' %}selected{% endif %}>NON-COMPLIANT</option><option value="SUPPRESSED" {% if filters.status == 'SUPPRESSED' %}selected{% endif %}>SUPPRESSED</option></select></label>
   <label class="grow">Keyword<input type="search" name="q" value="{{ filters.q }}" placeholder="Rule, resource, title or evidence"></label>
   <button class="btn btn-primary" type="submit">Search</button>
   <a class="btn btn-outline" href="{% url 'findings' %}">Reset</a>
 </form>
-<section class="panel"><div class="panel-head"><div><h2>Findings</h2><p>Up to 1,000 matching records are shown. Hover over a policy name for a short description and control context.</p></div></div>
+
+<section class="panel chart-card">
+  <div class="panel-head">
+    <div>
+      <h2>Compliance Score</h2>
+      <p>Policy posture for the selected Account, Module, Policy and Keyword filters. The Status filter affects the table only.</p>
+    </div>
+    <div><strong>{{ score_scope_count }}</strong> checks in score scope</div>
+  </div>
+  <div class="posture-chart-wrap">
+    {% if posture.total %}
+    <div class="posture-donut" style="background:conic-gradient(#1FA855 0 {{ posture.compliant_pct }}%, #DC3545 {{ posture.compliant_pct }}% {{ posture.non_compliant_end }}%, #F59E0B {{ posture.non_compliant_end }}% 100%);">
+      <div class="posture-donut-center"><strong>{{ posture.score }}%</strong><span>Compliant</span></div>
+    </div>
+    {% else %}
+    <div class="posture-donut" style="background:#E5E7EB;">
+      <div class="posture-donut-center"><strong>0%</strong><span>No data</span></div>
+    </div>
+    {% endif %}
+    <div class="chart-legend">
+      <div><span class="legend-dot legend-success"></span><b>Compliant</b><strong>{{ posture.compliant }}</strong><small>{{ posture.compliant_pct }}%</small></div>
+      <div><span class="legend-dot legend-danger"></span><b>Non-Compliant</b><strong>{{ posture.non_compliant }}</strong><small>{{ posture.non_compliant_pct }}%</small></div>
+      <div><span class="legend-dot legend-warning"></span><b>Suppressed</b><strong>{{ posture.suppressed }}</strong><small>{{ posture.suppressed_pct }}%</small></div>
+    </div>
+  </div>
+</section>
+
+<section class="panel"><div class="panel-head"><div><h2>Findings</h2><p>{{ filtered_count }} matching records; up to 1,000 are shown. Hover over a policy name for a short description and control context.</p></div></div>
 <div class="table-wrap"><table><thead><tr><th>Rule / Module</th><th>Account</th><th>Region</th><th>Service</th><th>Resource</th><th>Policy / Finding</th><th>Severity</th><th>Status</th><th>Action</th></tr></thead><tbody>
 {% for f in findings %}<tr>
 <td><strong>{{ f.rule_id }}</strong><small>{{ f.module }}</small></td>
