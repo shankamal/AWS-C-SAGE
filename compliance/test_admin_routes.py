@@ -1,7 +1,10 @@
-from django.test import SimpleTestCase
+from django.test import SimpleTestCase, override_settings
 from django.urls import resolve, reverse
 
 
+@override_settings(STORAGES={
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"}
+})
 class AdminRouteTests(SimpleTestCase):
     def test_canonical_admin_route_resolves(self):
         match = resolve("/admin/")
