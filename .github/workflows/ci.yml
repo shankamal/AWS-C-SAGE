@@ -54,5 +54,7 @@ jobs:
       - name: Validate hardened runtime baseline
         run: |
           docker run --rm --entrypoint sh c-sage:${{ github.sha }} -c 'ldd --version 2>&1 | grep -qi musl'
-          docker run --rm --entrypoint sh c-sage:${{ github.sha }} -c '! command -v perl >/dev/null 2>&1'
+          docker run --rm --entrypoint sh c-sage:${{ github.sha }} -c '! apk info -e glibc >/dev/null 2>&1'
+          docker run --rm --entrypoint sh c-sage:${{ github.sha }} -c '! apk info -e perl >/dev/null 2>&1'
+          docker run --rm --entrypoint sh c-sage:${{ github.sha }} -c '! apk info -e pcre2 >/dev/null 2>&1'
           docker run --rm c-sage:${{ github.sha }} python -c "import sqlite3,sys; print('SQLite', sqlite3.sqlite_version); sys.exit(0 if sqlite3.sqlite_version_info >= (3,53,4) else 1)"
