@@ -4,7 +4,12 @@ from . import admin_views, enhanced_views, views
 urlpatterns = [
     path("", enhanced_views.dashboard, name="dashboard"),
     path("healthz/", views.healthz, name="healthz"),
+    # Canonical administration endpoint plus explicit aliases so direct links such as
+    # /admin, /admin/login and /admin/login/ all resolve to the C-SAGE admin console.
+    path("admin", admin_views.admin_console, name="csage_admin_no_slash"),
     path("admin/", admin_views.admin_console, name="csage_admin"),
+    path("admin/login", admin_views.admin_console, name="csage_admin_login_no_slash"),
+    path("admin/login/", admin_views.admin_console, name="csage_admin_login"),
     path("findings/", views.findings_view, name="findings"),
     path("inventory/", enhanced_views.inventory_view, name="inventory"),
     path("inventory/<str:resource_key>/", views.resource_detail, name="resource_detail"),
