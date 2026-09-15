@@ -28,8 +28,10 @@ class BasicAuthMiddleware:
         self.disable_auth = os.getenv("CSAGE_DISABLE_AUTH", "false").lower() == "true"
 
     def __call__(self, request):
-        # /admin/ has its own dedicated signed-cookie administrator authentication.
-        if request.path == "/healthz/" or request.path.startswith("/static/") or request.path.startswith("/admin/"):
+        # The C-SAGE admin area has its own dedicated signed-cookie administrator
+        # authentication. Bypass application Basic Auth for both /admin and /admin/*.
+        is_admin_path = request.path == "/admin" or request.path.startswith("/admin/")
+        if request.path == "/healthz/" or request.path.startswith("/static/") or is_admin_path:
             return self.get_response(request)
 
         if self.disable_auth:
