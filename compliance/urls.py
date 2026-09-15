@@ -1,9 +1,10 @@
 from django.urls import path
-from . import enhanced_views, views
+from . import admin_views, enhanced_views, views
 
 urlpatterns = [
     path("", enhanced_views.dashboard, name="dashboard"),
     path("healthz/", views.healthz, name="healthz"),
+    path("admin/", admin_views.admin_console, name="csage_admin"),
     path("findings/", views.findings_view, name="findings"),
     path("inventory/", enhanced_views.inventory_view, name="inventory"),
     path("inventory/<str:resource_key>/", views.resource_detail, name="resource_detail"),
