@@ -168,11 +168,12 @@ class ComplianceOrchestrator:
         if self.inventory_include_deleted:
             deleted_inventory, deleted_coverage = discover_deleted_inventory(session, target, regions)
 
-        # Deleted Config-history rows use a dedicated service identity, so they remain distinct
-        # historical records rather than being merged into currently provisioned resources.
+        # The native SecurityGroupRules API is intentionally consolidated first so its rich
+        # normalized row remains canonical if AWS Config also reports the same sgr-* resource.
+        # Deleted Config-history rows use a dedicated service identity and remain historical rows.
         inventory = self._consolidate_inventory(
-            inventory,
             security_group_rule_inventory,
+            inventory,
             control_inventory,
             explorer_inventory,
             deleted_inventory,
