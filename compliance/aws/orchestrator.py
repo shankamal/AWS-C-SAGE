@@ -13,6 +13,7 @@ from .deleted_inventory import discover_deleted_inventory
 from .inventory import discover_inventory
 from .lifecycle import scan_dynamic_lifecycle, scan_lambda_dynamic
 from .resource_explorer_inventory import discover_resource_explorer
+from .security_group_inventory import discover_security_group_rule_inventory
 from .session import session_for
 from .scanners import SCANNERS
 from .suppressions import SuppressionStore, make_finding_key
@@ -157,6 +158,9 @@ class ComplianceOrchestrator:
         # Master Inventory is independent from compliance findings. It deliberately records
         # zero-resource and access-denied coverage instead of silently omitting services.
         inventory, coverage = discover_inventory(session, target, regions, self.home_region)
+        security_group_rule_inventory, security_group_rule_coverage = discover_security_group_rule_inventory(
+            session, target, regions
+        )
         control_inventory, control_coverage = discover_control_plane_inventory(session, target, regions)
         explorer_inventory, explorer_coverage = discover_resource_explorer(session, target, regions)
 
@@ -167,8 +171,13 @@ class ComplianceOrchestrator:
         # Deleted Config-history rows use a dedicated service identity, so they remain distinct
         # historical records rather than being merged into currently provisioned resources.
         inventory = self._consolidate_inventory(
-            inventory, control_inventory, explorer_inventory, deleted_inventory
+            inventory,
+            security_group_rule_inventory,
+            control_inventory,
+            explorer_inventory,
+            deleted_inventory,
         )
+        coverage.extend(security_group_rule_coverage)
         coverage.extend(control_coverage)
         coverage.extend(explorer_coverage)
         coverage.extend(deleted_coverage)
