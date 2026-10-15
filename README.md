@@ -2,7 +2,7 @@
 
 **Cloud Security, Audit, Governance & Enforcement**
 
-C-SAGE is an AWS multi-account cloud compliance and governance application built with Django and Boto3. It provides complete-inventory discovery, compliance findings, suppression workflows, lifecycle evidence, and exportable audit evidence through an ICICI Bank-aligned enterprise UI.
+C-SAGE is an AWS multi-account cloud compliance and governance application built with Django and Boto3. It provides complete-inventory discovery, compliance findings, suppression workflows, lifecycle evidence, and exportable audit evidence through an aligned enterprise UI.
 
 ## Key capabilities
 
